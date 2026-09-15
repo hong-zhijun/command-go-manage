@@ -1,0 +1,34 @@
+services:
+  command-go:
+    build: .
+    container_name: command-go-manage
+    ports:
+      - "${PORT:-3050}:3050"
+    volumes:
+      - cg-data:/app/data
+    environment:
+      - PORT=3050
+      - HOST=0.0.0.0
+      - DB_PATH=/app/data/command-go.db
+      # ⚠️ 生产环境务必修改以下值
+      - JWT_SECRET=${JWT_SECRET:-please-change-this-secret}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      # CC 代理配置
+      - CC_API_BASE=${CC_API_BASE:-https://api.commandcode.ai}
+      - CC_STREAM_IDLE_MS=${CC_STREAM_IDLE_MS:-30000}
+      - CC_NONSTREAM_IDLE_MS=${CC_NONSTREAM_IDLE_MS:-90000}
+      - CC_MAX_BODY_MB=${CC_MAX_BODY_MB:-100}
+      # 额度同步间隔（默认 5 分钟）
+      - QUOTA_REFRESH_INTERVAL_MS=${QUOTA_REFRESH_INTERVAL_MS:-300000}
+      # 自定义 Key 前缀
+      - API_KEY_PREFIX=${API_KEY_PREFIX:-sk-cg-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3050/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  cg-data:
