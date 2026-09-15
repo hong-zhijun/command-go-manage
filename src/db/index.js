@@ -6,7 +6,7 @@ import Database from 'better-sqlite3';
 import { readFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { hashSync } from 'bcryptjs';
+import { hashSync, compareSync } from 'bcryptjs';
 import config from '../config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -45,14 +45,21 @@ export function getDb() {
     }
   }
 
-  // 创建初始管理员（如果不存在）
-  const admin = db.prepare('SELECT id FROM users WHERE username = ?').get(config.adminUsername);
+  // 创建初始管理员（如果不存在）；已存在则同步环境变量中的密码
+  const admin = db.prepare('SELECT id, password_hash FROM users WHERE username = ?').get(config.adminUsername);
   if (!admin) {
     const hash = hashSync(config.adminPassword, 10);
     db.prepare(
       'INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)'
     ).run(config.adminUsername, hash, 'admin', Date.now());
     console.log(`[db] Admin user "${config.adminUsername}" created`);
+  } else {
+    // 环境变量密码与数据库不一致时自动更新
+    if (!compareSync(config.adminPassword, admin.password_hash)) {
+      const newHash = hashSync(config.adminPassword, 10);
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, admin.id);
+      console.log(`[db] Admin password synced from environment`);
+    }
   }
 
   // 启动时清除残留的 inflight 计数（进程崩溃后不会归零）
