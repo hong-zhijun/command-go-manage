@@ -63,32 +63,11 @@ setInterval(() => {
 
 function nowUnix() { return Math.floor(Date.now() / 1000); }
 
-/**
- * 构建额度相关响应头（让下游网关如 sub2api 能读取）
- */
-function buildQuotaHeaders(ccKeyRow) {
-  const h = {};
-  // 5 小时窗口
-  if (ccKeyRow.five_hour_cap > 0) {
-    h['X-RateLimit-Limit-5h'] = String(ccKeyRow.five_hour_cap);
-    h['X-RateLimit-Remaining-5h'] = String(Math.max(0, ccKeyRow.five_hour_cap - (ccKeyRow.five_hour_used || 0)));
-    if (ccKeyRow.five_hour_reset > 0) h['X-RateLimit-Reset-5h'] = String(Math.floor(ccKeyRow.five_hour_reset / 1000));
-  }
-  // 7 天窗口
-  if (ccKeyRow.weekly_cap > 0) {
-    h['X-RateLimit-Limit-7d'] = String(ccKeyRow.weekly_cap);
-    h['X-RateLimit-Remaining-7d'] = String(Math.max(0, ccKeyRow.weekly_cap - (ccKeyRow.weekly_used || 0)));
-    if (ccKeyRow.weekly_reset > 0) h['X-RateLimit-Reset-7d'] = String(Math.floor(ccKeyRow.weekly_reset / 1000));
-  }
-  return h;
-}
-
-function sendJsonRaw(res, status, data, extraHeaders) {
+function sendJsonRaw(res, status, data) {
   const body = JSON.stringify(data);
   res.writeHead(status, {
     'Content-Type': 'application/json',
     ...(data?.retry_after ? { 'Retry-After': String(data.retry_after) } : {}),
-    ...(extraHeaders || {}),
   });
   res.end(body);
 }
@@ -236,7 +215,6 @@ export default async function proxyRoutes(fastify) {
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive',
                     'X-Accel-Buffering': 'no',
-                    ...buildQuotaHeaders(ccKeyRow),
                   });
                   started = true;
                 }
@@ -268,7 +246,7 @@ export default async function proxyRoutes(fastify) {
               }
             } else {
               if (!started) {
-                res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', ...buildQuotaHeaders(ccKeyRow) });
+                res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
                 started = true;
               }
               res.write(translator.getDoneEvent());
@@ -378,7 +356,7 @@ export default async function proxyRoutes(fastify) {
           usage.inputTokens ?? 0, usage.outputTokens ?? 0, usage.cachedInputTokens ?? 0,
           Date.now() - startTime, 'ok');
 
-        sendJsonRaw(res, 200, responseData, buildQuotaHeaders(ccKeyRow));
+        sendJsonRaw(res, 200, responseData);
       }
 
       releaseCcKey(ccKeyRow.id);
