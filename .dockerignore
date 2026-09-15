@@ -1,5 +1,13 @@
 node_modules
 data
-.git
-*.md
+*.db
+*.db-wal
+*.db-shm
 .env
+.git
+.gitignore
+*.md
+Dockerfile
+docker-compose.yml
+.DS_Store
+Thumbs.db

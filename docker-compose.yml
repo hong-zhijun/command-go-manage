@@ -1,11 +1,13 @@
 services:
   command-go:
-    build: .
+    image: ghcr.io/hong-zhijun/command-go-manage:latest
+    # 本地构建时注释 image 行，取消注释 build 行
+    # build: .
     container_name: command-go-manage
     ports:
       - "${PORT:-3050}:3050"
     volumes:
-      - cg-data:/app/data
+      - cgm-data:/app/data
     environment:
       - PORT=3050
       - HOST=0.0.0.0
@@ -31,4 +33,4 @@ services:
       retries: 3
 
 volumes:
-  cg-data:
+  cgm-data:
