@@ -7,7 +7,7 @@ services:
     ports:
       - "${PORT:-3050}:3050"
     volumes:
-      - cgm-data:/app/data
+      - ./data:/app/data
     environment:
       - PORT=3050
       - HOST=0.0.0.0
@@ -31,6 +31,3 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  cgm-data:
