@@ -37,8 +37,8 @@ async function main() {
   getDb();
 
   const app = Fastify({
-    logger: true,
-    // 允许大请求体（代理需要）
+    logger: false,
+    disableRequestLogging: true,
     bodyLimit: config.ccMaxBodyMb * 1024 * 1024,
   });
 

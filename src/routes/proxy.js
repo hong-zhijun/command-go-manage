@@ -802,10 +802,11 @@ export default async function proxyRoutes(fastify) {
     try {
       // 5. 初始化
       const fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+      console.log('[responses] before ensureInitialized');
       await ensureInitialized(ccKey, abortController.signal, fpOverrides);
-
-      // 6. 转发
+      console.log('[responses] before forwardToCC');
       const ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+      console.log('[responses] forwardToCC returned', ccResponse.status);
 
       if (!ccResponse.ok) {
         const errorText = await ccResponse.text().catch(() => '');
