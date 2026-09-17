@@ -146,8 +146,6 @@
   .filter-row select:focus { border-color: var(--accent); }
 
   /* ── 进度条 ── */
-  .progress-bar { height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
-  .progress-bar .fill { height: 100%; border-radius: 4px; transition: width .3s; }
   .fill.green { background: var(--green); }
   .fill.yellow { background: var(--yellow); }
   .fill.red { background: var(--red); }
@@ -162,53 +160,43 @@
   .btn-secondary { padding: 9px 18px; border-radius: 8px; background: var(--surface); color: var(--text-dim); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; border: 1px solid var(--border); transition: all .15s; }
   .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
 
-  /* ── CC Key 卡片网格 ── */
-  .key-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
-  .key-card { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow-sm); transition: box-shadow .15s; }
-  .key-card:hover { box-shadow: var(--shadow-md); }
-  .key-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-  .key-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
-  .key-label { font-size: 15px; font-weight: 600; color: var(--text-bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .key-sub { font-size: 13px; color: var(--text-dim); font-family: 'SF Mono', Monaco, monospace; margin-bottom: 16px; line-height: 1.4; }
+  /* ── CC Key 表格 ── */
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; flex-shrink: 0; }
   .badge.active { background: var(--green-light); color: var(--green); }
   .badge.error { background: var(--red-light); color: var(--red); }
   .badge.exhausted { background: var(--yellow-light); color: #b45309; }
 
-  /* ── CC Key 额度窗口 ── */
-  .quota-section { margin-bottom: 14px; }
-  .quota-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 5px; }
-  .quota-label { color: var(--text-dim); font-weight: 500; }
-  .quota-value { color: var(--text-bright); font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* ── CC Key 额度单元格 ── */
+  .quota-cell { min-width: 110px; }
+  .quota-bar { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin-bottom: 4px; cursor: default; }
+  .quota-bar .fill { height: 100%; border-radius: 3px; }
+  .quota-time { font-size: 12px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-  /* ── CC Key 用量统计 ── */
-  .usage-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-light); }
-  .usage-item { text-align: center; }
-  .usage-num { font-size: 18px; font-weight: 700; color: var(--text-bright); line-height: 1.2; }
-  .usage-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+  /* ── CC Key 标签编辑 ── */
+  .label-edit { display: inline-flex; align-items: center; gap: 4px; }
+  .label-edit .btn-edit-label { border: none; background: none; cursor: pointer; color: var(--text-dim); font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all .15s; visibility: hidden; }
+  tr:hover .label-edit .btn-edit-label { visibility: visible; }
+  .label-edit .btn-edit-label:hover { color: var(--accent); background: var(--accent-light); }
 
-  /* ── CC Key 底部信息 ── */
-  .key-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-light); }
-
-  /* ── 调度控制 ── */
-  .dispatch-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-light); }
-  .dispatch-title { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
-  .dispatch-title .arrow { transition: transform .15s; font-size: 10px; }
-  .dispatch-title .arrow.open { transform: rotate(90deg); }
-  .dispatch-body { display: none; }
-  .dispatch-body.open { display: block; }
-  .dispatch-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; }
-  .dispatch-row label { color: var(--text-dim); font-weight: 500; min-width: 80px; font-size: 12px; }
-  .dispatch-row input[type="number"] { width: 72px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; outline: none; font-variant-numeric: tabular-nums; }
-  .dispatch-row input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-  .dispatch-row select { flex: 1; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; outline: none; }
-  .dispatch-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
-  .btn-save-dispatch { padding: 5px 14px; border-radius: 6px; font-size: 12px; border: 1px solid var(--green); background: var(--green-light); color: var(--green); cursor: pointer; font-weight: 500; transition: all .15s; margin-top: 4px; }
+  /* ── 弹窗 ── */
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.35); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 480px; max-width: 90vw; max-height: 80vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; color: var(--text-bright); }
+  .modal-close { float: right; border: none; background: none; font-size: 20px; cursor: pointer; color: var(--text-dim); line-height: 1; }
+  .modal-close:hover { color: var(--text); }
+  .modal-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+  .modal-row label { color: var(--text-dim); font-weight: 500; min-width: 80px; font-size: 12px; }
+  .modal-row input[type="number"] { width: 80px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; outline: none; font-variant-numeric: tabular-nums; }
+  .modal-row input[type="number"]:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+  .modal-row select { flex: 1; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; outline: none; }
+  .modal-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-light); }
+  .btn-save-dispatch { padding: 6px 16px; border-radius: 6px; font-size: 12px; border: 1px solid var(--green); background: var(--green-light); color: var(--green); cursor: pointer; font-weight: 500; transition: all .15s; margin-top: 6px; }
   .btn-save-dispatch:hover { background: var(--green); color: #fff; }
   .btn-save-dispatch:disabled { opacity: .5; cursor: not-allowed; }
 
-  /* ── 设备指纹摘要 ── */
-  .device-section { margin-top: 10px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; }
+  /* ── 设备指纹摘要（弹窗内） ── */
+  .device-section { margin-top: 12px; padding: 10px 12px; background: var(--surface2); border-radius: 8px; }
   .device-title { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
   .device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 12px; font-size: 12px; }
   .device-grid dt { color: var(--text-dim); }
@@ -223,13 +211,10 @@
   /* ── 小按钮 ── */
   .btn-sm { padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; border: 1px solid var(--border); background: var(--surface); color: var(--text-dim); transition: all .15s; }
   .btn-sm:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
-  .btn-sm.danger { color: var(--text-dim); }
-  .btn-sm.danger:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
-
-  /* ── 标签编辑 ── */
-  .label-edit { display: inline-flex; align-items: center; gap: 4px; }
-  .label-edit .btn-edit-label { border: none; background: none; cursor: pointer; color: var(--text-dim); font-size: 12px; padding: 2px 4px; border-radius: 4px; transition: all .15s; }
-  .label-edit .btn-edit-label:hover { color: var(--accent); background: var(--accent-light); }
+  .btn-sm.danger { color: var(--red); border-color: var(--red); }
+  .btn-sm.danger:hover { background: var(--red); color: #fff; }
+  .btn-sm.primary { color: var(--accent); border-color: var(--accent); }
+  .btn-sm.primary:hover { background: var(--accent); color: #fff; }
 
   /* ── 空状态 ── */
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); font-size: 14px; }
@@ -258,6 +243,12 @@
   /* ── 按钮 loading ── */
   .btn-action:disabled, .btn-secondary:disabled { opacity: .6; cursor: not-allowed; pointer-events: none; }
 
+  /* ── 刷新旋转 ── */
+  .btn-sm.spinning { pointer-events: none; color: var(--accent); border-color: var(--accent); }
+  .btn-sm.spinning::before { content: '↻'; display: inline-block; animation: spin 0.8s linear infinite; margin-right: 2px; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  tr.refreshing td { opacity: .5; transition: opacity .2s; pointer-events: none; }
+
   /* ── 响应式 ── */
   @media (max-width: 768px) {
     .chart-grid { grid-template-columns: 1fr; }
@@ -266,7 +257,7 @@
     .navbar { padding: 0 16px; }
     .container { padding: 16px; }
     .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .key-grid { grid-template-columns: 1fr; }
+    .card table { font-size: 12px; }
     .tabs { overflow-x: auto; width: auto; }
     .tab { padding: 8px 14px; font-size: 12px; }
     .login-card { padding: 28px 24px; margin: 0 16px; }
@@ -311,7 +302,7 @@
     <div class="tabs" id="tabs">
       <div class="tab active" data-tab="overview">概览</div>
       <div class="tab" data-tab="keys">API Key</div>
-      <div class="tab" data-tab="cc-pool">CC Key 池</div>
+      <div class="tab" data-tab="cc-pool">CC 账号池</div>
       <div class="tab" data-tab="logs">请求日志</div>
     </div>
 
@@ -348,7 +339,7 @@
           <div class="chart-wrap"><canvas id="chart-models"></canvas></div>
         </div>
         <div class="chart-card">
-          <h4>🏊 CC Key 池健康</h4>
+          <h4>🏊 CC 账号池健康</h4>
           <div id="pool-health-wrap" class="pool-health" style="padding-top:20px">
             <div class="skeleton skeleton-block" style="height:120px"></div>
           </div>
@@ -359,11 +350,12 @@
     <!-- ═══ 我的 API Key ═══ -->
     <div class="tab-content" id="tab-keys">
       <div class="card">
-        <h3>我的 API Key</h3>
-        <p class="card-desc">使用这些 Key 调用 <code>/v1/chat/completions</code> 等代理接口</p>
-        <div class="input-row">
-          <input id="key-name-input" placeholder="Key 名称（可选）">
-          <button class="btn-action" onclick="createKey()">+ 创建 Key</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <h3>我的 API Key</h3>
+            <p class="card-desc" style="margin:0">使用这些 Key 调用 <code>/v1/chat/completions</code> 等代理接口</p>
+          </div>
+          <button class="btn-action" onclick="openCreateKeyModal()">+ 创建 Key</button>
         </div>
         <div class="key-banner" id="new-key-banner">
           <strong>✓ 新 Key 已创建</strong>
@@ -377,18 +369,70 @@
       </div>
     </div>
 
-    <!-- ═══ CC Key 池 ═══ -->
+    <!-- 创建 API Key 弹窗 -->
+    <div class="modal-overlay" id="create-key-modal" onclick="if(event.target===this)closeCreateKeyModal()">
+      <div class="modal" style="width:400px">
+        <button class="modal-close" onclick="closeCreateKeyModal()">&times;</button>
+        <h3>创建 API Key</h3>
+        <div class="modal-row" style="flex-direction:column;align-items:stretch;gap:6px">
+          <label>名称 <span style="color:var(--red)">*</span></label>
+          <input type="text" id="create-key-name" placeholder="例如：cursor、cline" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;outline:none">
+        </div>
+        <div style="margin-top:16px;text-align:right">
+          <button class="btn-secondary" onclick="closeCreateKeyModal()" style="margin-right:8px">取消</button>
+          <button class="btn-action" id="create-key-btn" onclick="createKey()">创建</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ CC 账号池 ═══ -->
     <div class="tab-content" id="tab-cc-pool">
       <div class="card">
-        <h3>CC Key 池</h3>
-        <p class="card-desc">管理底层 CC 密钥，系统自动负载均衡分配</p>
-        <div class="input-row">
-          <input id="cc-key-input" placeholder="user_xxxxxxxxx（CC 原始 Key）">
-          <input id="cc-label-input" placeholder="备注（可选）" style="max-width:200px">
-          <button class="btn-action" onclick="addCcKey()">+ 添加</button>
-          <button class="btn-secondary" onclick="refreshAllCcKeys()">↻ 全部刷新</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <h3>CC 账号池</h3>
+            <p class="card-desc" style="margin:0">管理底层 CC 密钥，系统自动负载均衡分配</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-action" onclick="openAddCcModal()">+ 添加</button>
+            <button class="btn-secondary" onclick="refreshAllCcKeys()">↻ 全部刷新</button>
+          </div>
         </div>
-        <div class="key-grid" id="cc-keys-grid"></div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>状态</th><th>备注</th><th>5h 额度</th><th>周额度</th><th>月额度</th><th>Token</th><th>在途</th><th>操作</th></tr></thead>
+            <tbody id="cc-keys-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- CC Key 详情弹窗 -->
+    <div class="modal-overlay" id="cckey-modal" onclick="if(event.target===this)closeCcModal()">
+      <div class="modal">
+        <button class="modal-close" onclick="closeCcModal()">&times;</button>
+        <h3 id="cckey-modal-title">Key 详情</h3>
+        <div id="cckey-modal-body"></div>
+      </div>
+    </div>
+
+    <!-- 添加 CC 账号弹窗 -->
+    <div class="modal-overlay" id="add-cc-modal" onclick="if(event.target===this)closeAddCcModal()">
+      <div class="modal" style="width:420px">
+        <button class="modal-close" onclick="closeAddCcModal()">&times;</button>
+        <h3>添加 CC 账号</h3>
+        <div class="modal-row" style="flex-direction:column;align-items:stretch;gap:6px">
+          <label>CC Key <span style="color:var(--red)">*</span></label>
+          <input type="text" id="add-cc-key-input" placeholder="user_xxxxxxxxx" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;outline:none;font-family:monospace">
+        </div>
+        <div class="modal-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:12px">
+          <label>备注</label>
+          <input type="text" id="add-cc-label-input" placeholder="可选，方便识别" style="width:100%;padding:8px 12px;border-radius:6px;border:1px solid var(--border);font-size:13px;outline:none">
+        </div>
+        <div style="margin-top:16px;text-align:right">
+          <button class="btn-secondary" onclick="closeAddCcModal()" style="margin-right:8px">取消</button>
+          <button class="btn-action" id="add-cc-btn" onclick="addCcKey()">添加</button>
+        </div>
       </div>
     </div>
 
@@ -409,7 +453,7 @@
         </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>时间</th><th>用户</th><th>模型</th><th>输入</th><th>缓存</th><th>输出</th><th>耗时</th><th>状态</th><th>CC Key</th></tr></thead>
+            <thead><tr><th>时间</th><th>用户</th><th>API Key</th><th>模型</th><th>输入</th><th>缓存</th><th>输出</th><th>耗时</th><th>状态</th><th>CC Key</th></tr></thead>
             <tbody id="logs-tbody"></tbody>
           </table>
         </div>
@@ -684,16 +728,30 @@ async function loadKeys() {
   } catch {}
 }
 
+function openCreateKeyModal() {
+  document.getElementById('create-key-name').value = '';
+  document.getElementById('create-key-modal').classList.add('open');
+  setTimeout(() => document.getElementById('create-key-name').focus(), 100);
+}
+
+function closeCreateKeyModal() {
+  document.getElementById('create-key-modal').classList.remove('open');
+}
+
 async function createKey() {
-  const name = document.getElementById('key-name-input').value.trim();
+  const name = document.getElementById('create-key-name').value.trim();
+  if (!name) { toast('请输入 Key 名称', 'error'); return; }
+  const btn = document.getElementById('create-key-btn');
+  setBtnLoading(btn, true);
   try {
     const data = await api('/api/auth/keys', { method: 'POST', body: JSON.stringify({ name }) });
+    closeCreateKeyModal();
     document.getElementById('new-key-value').textContent = data.key;
     document.getElementById('new-key-banner').style.display = 'block';
-    document.getElementById('key-name-input').value = '';
     toast('API Key 创建成功');
     await loadKeys();
   } catch (e) { toast(e.message, 'error'); }
+  finally { setBtnLoading(btn, false, '创建'); }
 }
 
 async function deleteKey(id) {
@@ -702,118 +760,120 @@ async function deleteKey(id) {
   catch (e) { toast(e.message, 'error'); }
 }
 
-// ── CC Key 池 ──
+// ── CC 账号池 ──
+
+let ccKeysData = [];
 
 async function loadCcKeys() {
   try {
     await loadTimezones();
     const data = await api('/api/admin/cc-keys');
-    const grid = document.getElementById('cc-keys-grid');
-    const keys = data.keys || [];
-    if (keys.length === 0) {
-      grid.innerHTML = '<div class="empty-state">暂无 CC Key，请添加</div>';
+    ccKeysData = data.keys || [];
+    const tbody = document.getElementById('cc-keys-tbody');
+    if (ccKeysData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无 CC Key，请添加</td></tr>';
       return;
     }
-    grid.innerHTML = keys.map(renderCcKey).join('');
+    tbody.innerHTML = ccKeysData.map(renderCcKeyRow).join('');
   } catch {}
 }
 
-function renderCcKey(k) {
-  const fh = k.credits?.fiveHour;
-  const wk = k.credits?.weekly;
-  const usage = k.detail?.usage;
-  const planTag = k.plan?.name ? `<span style="color:var(--accent);font-weight:500">${esc(k.plan.name)}</span>` : '';
-
-  return `
-    <div class="key-card">
-      <div class="key-head">
-        <div class="key-head-left">
-          <div class="label-edit">
-            <span class="key-label">${esc(k.label || k.maskedKey)}</span>
-            <button class="btn-edit-label" onclick="editCcLabel(${k.id}, this)" title="编辑备注">✎</button>
-          </div>
-          <span class="badge ${k.status}">${k.status === 'active' ? '正常' : k.status === 'error' ? '异常' : k.status === 'exhausted' ? '超限' : k.status}</span>
-        </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn-sm" onclick="refreshCcKey(${k.id})">刷新</button>
-          <button class="btn-sm danger" onclick="deleteCcKey(${k.id})">删除</button>
-        </div>
-      </div>
-      <div class="key-sub">${esc(k.maskedKey)}${k.userName ? ' · ' + esc(k.userName) : ''}${planTag ? ' · ' + planTag : ''}</div>
-
-      ${fh ? renderWindow('5 小时窗口', fh) : ''}
-      ${wk ? renderWindow('每周窗口', wk) : ''}
-      ${k.credits?.monthlyLeft != null ? renderMonthly(k) : ''}
-      ${k.lastError ? `<div style="font-size:13px;color:var(--red);margin-top:8px">⚠ ${esc(k.lastError.slice(0, 120))}</div>` : ''}
-
-      ${usage ? `
-        <div class="usage-grid">
-          <div class="usage-item"><div class="usage-num">${fmtNum(usage.totalCount)}</div><div class="usage-label">总请求</div></div>
-          <div class="usage-item"><div class="usage-num">${fmtNum(usage.totalTokensIn)}</div><div class="usage-label">输入 Token</div></div>
-          <div class="usage-item"><div class="usage-num">${fmtNum(usage.totalTokensOut)}</div><div class="usage-label">输出 Token</div></div>
-        </div>
-      ` : ''}
-
-      <div class="dispatch-section">
-        <div class="dispatch-title" onclick="toggleDispatch(${k.id})">
-          <span class="arrow" id="dispatch-arrow-${k.id}">▶</span>
-          调度 & 指纹
-        </div>
-        <div class="dispatch-body" id="dispatch-body-${k.id}">
-          <div class="dispatch-row">
-            <label>权重</label>
-            <input type="number" id="dp-priority-${k.id}" value="${k.priority}" min="1" max="100" title="1-100，越大越优先">
-          </div>
-          <div class="dispatch-row">
-            <label>最大并发</label>
-            <input type="number" id="dp-concurrent-${k.id}" value="${k.maxConcurrent}" min="0" max="999" title="0 = 不限">
-          </div>
-          <div class="dispatch-row">
-            <label>时区</label>
-            <select id="dp-tz-${k.id}">${renderTzOptions(k.timezoneOverride)}</select>
-          </div>
-          <button class="btn-save-dispatch" onclick="saveDispatch(${k.id})">保存调度参数</button>
-          ${k.device ? `
-            <div class="device-section">
-              <div class="device-title">🖥 设备指纹</div>
-              <dl class="device-grid">
-                <dt>主机名</dt><dd>${esc(k.device.hostname)}</dd>
-                <dt>CPU</dt><dd>${esc(k.device.cpu)}</dd>
-                <dt>核心</dt><dd>${k.device.cores}</dd>
-                <dt>内存</dt><dd>${k.device.memGiB} GB</dd>
-                <dt>时区</dt><dd>${esc(k.device.timezone)}</dd>
-                <dt>网卡数</dt><dd>${k.device.macCount}</dd>
-              </dl>
-            </div>
-          ` : ''}
-        </div>
-      </div>
-
-      <div class="key-footer">
-        <span>在途: ${k.currentInflight} · 权重: ${k.priority}</span>
-        <span>更新: ${k.lastChecked ? fmtTime(k.lastChecked) : '未检查'}</span>
-      </div>
-    </div>
-  `;
+function renderCcKeyRow(k) {
+  const statusText = k.status === 'active' ? '正常' : k.status === 'error' ? '异常' : k.status === 'exhausted' ? '超限' : k.status;
+  return `<tr data-ccid="${k.id}">
+    <td><span class="badge ${k.status}">${statusText}</span></td>
+    <td><div class="label-edit"><span>${esc(k.label || '-')}</span><button class="btn-edit-label" onclick="editCcLabel(${k.id}, this)" title="编辑备注">✎</button></div></td>
+    <td class="quota-cell">${renderQuotaCell(k.credits?.fiveHour)}</td>
+    <td class="quota-cell">${renderQuotaCell(k.credits?.weekly)}</td>
+    <td class="quota-cell">${renderMonthlyCell(k)}</td>
+    <td style="text-align:center;font-size:12px;font-variant-numeric:tabular-nums">${renderTokenCell(k)}</td>
+    <td style="text-align:center">${k.currentInflight}</td>
+    <td style="white-space:nowrap">
+      <button class="btn-sm primary" onclick="openCcModal(${k.id})">详情</button>
+      <button class="btn-sm" onclick="refreshCcKey(${k.id})">刷新</button>
+      <button class="btn-sm danger" onclick="deleteCcKey(${k.id})">删除</button>
+    </td>
+  </tr>`;
 }
 
-function renderMonthly(k) {
+function renderQuotaCell(w) {
+  if (!w) return '<span style="color:var(--text-dim)">-</span>';
+  const pct = w.cap > 0 ? Math.min(100, (w.used / w.cap) * 100) : 0;
+  const cls = pct >= 90 ? 'red' : pct >= 50 ? 'yellow' : 'green';
+  const tip = `${fmtQuota(w.used)} / ${fmtQuota(w.cap)}`;
+  const reset = w.resetAt ? `<div class="quota-time">${fmtTime(w.resetAt)}</div>` : '<div class="quota-time" style="color:var(--text-dim)">待发起请求</div>';
+  return `<div class="quota-bar" title="${tip}"><div class="fill ${cls}" style="width:${pct}%"></div></div>${reset}`;
+}
+
+function renderMonthlyCell(k) {
+  if (k.credits?.monthlyLeft == null) return '<span style="color:var(--text-dim)">-</span>';
   const left = k.credits.monthlyLeft ?? 0;
   const total = k.detail?.monthlyCredits;
+  const periodEnd = k.detail?.currentPeriodEnd;
+  const reset = periodEnd ? `<div class="quota-time">${fmtTime(periodEnd)}</div>` : '<div class="quota-time" style="color:var(--text-dim)">待发起请求</div>';
   if (total && total > 0) {
     const used = Math.max(0, total - left);
     const pct = Math.min(100, (used / total) * 100);
     const cls = pct >= 90 ? 'red' : pct >= 50 ? 'yellow' : 'green';
-    return `<div class="quota-section"><div class="quota-row"><span class="quota-label">月额度</span><span class="quota-value">${used} / ${total}</span></div><div class="progress-bar"><div class="fill ${cls}" style="width:${pct}%"></div></div></div>`;
+    const tip = `${fmtQuota(used)} / ${fmtQuota(total)}`;
+    return `<div class="quota-bar" title="${tip}"><div class="fill ${cls}" style="width:${pct}%"></div></div>${reset}`;
   }
-  return `<div class="quota-row" style="margin-top:8px"><span class="quota-label">月余额</span><span class="quota-value">${left}</span></div>`;
+  const tip = `余额: ${fmtQuota(left)}`;
+  return `<div class="quota-bar" title="${tip}"><div class="fill green" style="width:100%"></div></div>${reset}`;
 }
 
-function renderWindow(name, w) {
-  if (!w) return '';
-  const pct = w.cap > 0 ? Math.min(100, (w.used / w.cap) * 100) : 0;
-  const cls = pct >= 90 ? 'red' : pct >= 50 ? 'yellow' : 'green';
-  return `<div class="quota-section"><div class="quota-row"><span class="quota-label">${name}</span><span class="quota-value">${w.used ?? 0} / ${w.cap ?? 0}</span></div><div class="progress-bar"><div class="fill ${cls}" style="width:${pct}%"></div></div></div>`;
+function renderTokenCell(k) {
+  const usage = k.detail?.usage;
+  if (!usage) return '-';
+  const total = (usage.totalTokensIn || 0) + (usage.totalTokensOut || 0);
+  const monthlyTotal = k.detail?.monthlyCredits;
+  const monthlyLeft = k.credits?.monthlyLeft;
+  let predict = '';
+  if (monthlyTotal > 0 && monthlyLeft != null) {
+    const used = Math.max(0, monthlyTotal - monthlyLeft);
+    if (used > 0) {
+      const ratio = used / monthlyTotal;
+      const predicted = Math.round(total / ratio);
+      predict = `<div style="font-size:11px;color:var(--text-dim)" title="按月额度消耗比例预估">~${fmtNum(predicted)}</div>`;
+    }
+  }
+  return `${fmtNum(total)}${predict}`;
+}
+
+function openCcModal(id) {
+  const k = ccKeysData.find(x => x.id === id);
+  if (!k) return;
+  document.getElementById('cckey-modal-title').textContent = k.label || k.maskedKey;
+  const usage = k.detail?.usage;
+  document.getElementById('cckey-modal-body').innerHTML = `
+    ${k.lastError ? `<div style="font-size:13px;color:var(--red);margin-bottom:12px">⚠ ${esc(k.lastError.slice(0, 200))}</div>` : ''}
+    ${usage ? `<div style="display:flex;gap:16px;margin-bottom:14px;font-size:13px">
+      <span>请求 <b>${fmtNum(usage.totalCount)}</b></span>
+      <span>输入 <b>${fmtNum(usage.totalTokensIn)}</b></span>
+      <span>输出 <b>${fmtNum(usage.totalTokensOut)}</b></span>
+    </div>` : ''}
+    <div style="font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">调度参数</div>
+    <div class="modal-row"><label>权重</label><input type="number" id="dp-priority-${k.id}" value="${k.priority}" min="1" max="100" title="1-100，越大越优先"></div>
+    <div class="modal-row"><label>最大并发</label><input type="number" id="dp-concurrent-${k.id}" value="${k.maxConcurrent}" min="0" max="999" title="0 = 不限"></div>
+    <div class="modal-row"><label>时区</label><select id="dp-tz-${k.id}">${renderTzOptions(k.timezoneOverride)}</select></div>
+    <button class="btn-save-dispatch" onclick="saveDispatch(${k.id})">保存调度参数</button>
+    ${k.device ? `<div class="device-section">
+      <div class="device-title">设备指纹</div>
+      <dl class="device-grid">
+        <dt>主机名</dt><dd>${esc(k.device.hostname)}</dd>
+        <dt>CPU</dt><dd>${esc(k.device.cpu)}</dd>
+        <dt>核心</dt><dd>${k.device.cores}</dd>
+        <dt>内存</dt><dd>${k.device.memGiB} GB</dd>
+        <dt>时区</dt><dd>${esc(k.device.timezone)}</dd>
+        <dt>网卡数</dt><dd>${k.device.macCount}</dd>
+      </dl>
+    </div>` : ''}
+  `;
+  document.getElementById('cckey-modal').classList.add('open');
+}
+
+function closeCcModal() {
+  document.getElementById('cckey-modal').classList.remove('open');
 }
 
 // ── CC Key 标签编辑 ──
@@ -859,13 +919,6 @@ function renderTzOptions(selected) {
   return tzs.map(tz => `<option value="${esc(tz)}" ${tz === (selected || '') ? 'selected' : ''}>${tz || '自动（按 Key 哈希）'}</option>`).join('');
 }
 
-function toggleDispatch(id) {
-  const body = document.getElementById('dispatch-body-' + id);
-  const arrow = document.getElementById('dispatch-arrow-' + id);
-  const isOpen = body.classList.toggle('open');
-  arrow.classList.toggle('open', isOpen);
-}
-
 async function saveDispatch(id) {
   const priority = Number(document.getElementById('dp-priority-' + id).value);
   const maxConcurrent = Number(document.getElementById('dp-concurrent-' + id).value);
@@ -875,46 +928,72 @@ async function saveDispatch(id) {
   try {
     await api('/api/admin/cc-keys/' + id + '/dispatch', { method: 'PATCH', body: JSON.stringify({ priority, maxConcurrent, timezoneOverride }) });
     toast('调度参数已更新');
+    closeCcModal();
     await loadCcKeys();
   } catch (e) { toast(e.message, 'error'); }
   finally { if (btn) setBtnLoading(btn, false, '保存调度参数'); }
 }
 
+function openAddCcModal() {
+  document.getElementById('add-cc-key-input').value = '';
+  document.getElementById('add-cc-label-input').value = '';
+  document.getElementById('add-cc-modal').classList.add('open');
+  setTimeout(() => document.getElementById('add-cc-key-input').focus(), 100);
+}
+
+function closeAddCcModal() {
+  document.getElementById('add-cc-modal').classList.remove('open');
+}
+
 async function addCcKey() {
-  const key = document.getElementById('cc-key-input').value.trim();
-  const label = document.getElementById('cc-label-input').value.trim();
+  const key = document.getElementById('add-cc-key-input').value.trim();
+  const label = document.getElementById('add-cc-label-input').value.trim();
   if (!key) { toast('请输入 CC Key', 'error'); return; }
-  const btn = document.querySelector('#tab-cc-pool .btn-action');
+  const btn = document.getElementById('add-cc-btn');
   setBtnLoading(btn, true);
   try {
     await api('/api/admin/cc-keys', { method: 'POST', body: JSON.stringify({ key, label }) });
-    document.getElementById('cc-key-input').value = '';
-    document.getElementById('cc-label-input').value = '';
-    toast('CC Key 添加成功');
+    closeAddCcModal();
+    toast('CC 账号添加成功');
     await loadCcKeys();
   } catch (e) { toast(e.message, 'error'); }
-  finally { setBtnLoading(btn, false, '+ 添加'); }
+  finally { setBtnLoading(btn, false, '添加'); }
 }
 
 async function refreshCcKey(id) {
+  const row = document.querySelector(`tr[data-ccid="${id}"]`);
   const btn = event?.target;
-  if (btn) setBtnLoading(btn, true);
+  if (row) row.classList.add('refreshing');
+  if (btn) { btn.classList.add('spinning'); btn.textContent = '刷新中'; btn.disabled = true; }
   try {
     await api('/api/admin/cc-keys/refresh', { method: 'POST', body: JSON.stringify({ id }) });
     toast('已刷新');
     await loadCcKeys();
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) { toast(e.message, 'error'); if (row) row.classList.remove('refreshing'); if (btn) { btn.classList.remove('spinning'); btn.textContent = '刷新'; btn.disabled = false; } }
 }
 
 async function refreshAllCcKeys() {
-  const btn = document.querySelector('#tab-cc-pool .btn-secondary');
-  setBtnLoading(btn, true);
-  try {
-    await api('/api/admin/cc-keys/refresh', { method: 'POST', body: JSON.stringify({}) });
-    toast('全部刷新完成');
-    await loadCcKeys();
-  } catch (e) { toast(e.message, 'error'); }
-  finally { setBtnLoading(btn, false, '↻ 全部刷新'); }
+  const btn = event?.target;
+  if (btn) { btn.classList.add('spinning'); btn.disabled = true; btn.textContent = '刷新中…'; }
+  const ids = ccKeysData.map(k => k.id);
+  let done = 0;
+  for (const id of ids) {
+    const row = document.querySelector(`tr[data-ccid="${id}"]`);
+    if (row) row.classList.add('refreshing');
+  }
+  const tasks = ids.map(async id => {
+    const row = document.querySelector(`tr[data-ccid="${id}"]`);
+    try {
+      await api('/api/admin/cc-keys/refresh', { method: 'POST', body: JSON.stringify({ id }) });
+    } catch {}
+    done++;
+    if (row) row.classList.remove('refreshing');
+    if (btn) btn.textContent = `刷新中 ${done}/${ids.length}`;
+  });
+  await Promise.allSettled(tasks);
+  toast('全部刷新完成');
+  await loadCcKeys();
+  if (btn) { btn.classList.remove('spinning'); btn.disabled = false; btn.textContent = '↻ 全部刷新'; }
 }
 
 async function deleteCcKey(id) {
@@ -952,7 +1031,7 @@ async function loadLogs(page) {
     const tbody = document.getElementById('logs-tbody');
     const logs = data.logs || [];
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无记录</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" class="empty-state">暂无记录</td></tr>';
       document.getElementById('logs-pagination').innerHTML = '';
       return;
     }
@@ -960,6 +1039,7 @@ async function loadLogs(page) {
       <tr>
         <td style="white-space:nowrap">${fmtTime(l.created_at)}</td>
         <td>${esc(l.username || '-')}</td>
+        <td style="font-size:12px;color:var(--text-dim)">${esc(l.api_key_name || '-')}</td>
         <td style="font-size:12px">${esc(l.model || '-')}</td>
         <td>${fmtNum(l.input_tokens)}</td>
         <td>${fmtNum(l.cached_tokens)}</td>
@@ -992,6 +1072,7 @@ function toast(msg, type = 'success', duration = 3000) {
 
 // ── 工具函数 ──
 
+function fmtQuota(n) { return n == null ? '0' : (Number.isInteger(n) ? String(n) : Number(n).toFixed(2)); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function fmtTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false }) : '-'; }
 function fmtNum(n) {

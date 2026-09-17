@@ -196,7 +196,7 @@ export async function syncAllCcKeys() {
   const results = await Promise.allSettled(keys.map(k => syncCcKey(k)));
   const ok = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
   const fail = results.length - ok;
-  console.log(`[quota-sync] Synced ${ok}/${results.length} keys (${fail} failed)`);
+  if (fail > 0) console.log(`[quota-sync] ${fail}/${results.length} keys failed`);
   return { total: results.length, ok, fail };
 }
 

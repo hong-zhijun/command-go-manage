@@ -88,9 +88,12 @@ export default async function authRoutes(fastify) {
     preHandler: [fastify.authenticate],
   }, async (request, reply) => {
     const { name } = request.body || {};
+    if (!name || !name.trim()) {
+      return reply.code(400).send({ error: 'Key 名称不能为空' });
+    }
     const { fullKey, keyHash, keyPrefix } = generateApiKey();
 
-    createApiKey(request.user.id, keyHash, keyPrefix, name || 'default');
+    createApiKey(request.user.id, keyHash, keyPrefix, name.trim());
 
     // ⚠️ fullKey 只在创建时返回一次，之后无法再获取
     return reply.code(201).send({

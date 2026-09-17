@@ -352,7 +352,7 @@ export function queryUsageLogs({ offset = 0, limit = 50, model, status, since, u
   const total = getDb().prepare(`SELECT COUNT(*) AS cnt FROM usage_logs ${where}`).get(...params).cnt;
 
   const rows = getDb().prepare(`
-    SELECT ul.*, u.username, ak.key_prefix, ck.label AS cc_label
+    SELECT ul.*, u.username, ak.key_prefix, ak.name AS api_key_name, ck.label AS cc_label
     FROM usage_logs ul
     LEFT JOIN users u ON ul.user_id = u.id
     LEFT JOIN api_keys ak ON ul.api_key_id = ak.id

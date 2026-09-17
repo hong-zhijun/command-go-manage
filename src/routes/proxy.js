@@ -203,7 +203,7 @@ export default async function proxyRoutes(fastify) {
 
       // 客户端断连处理
       let started = false;
-      req.on('close', () => {
+      res.on('close', () => {
         if (!aborted && !res.writableEnded) {
           aborted = true;
           // 断连前抢发 usage=0 终止 chunk，避免下游自行估算 token
@@ -489,7 +489,7 @@ export default async function proxyRoutes(fastify) {
       }
 
       // 客户端断连处理
-      req.on('close', () => {
+      res.on('close', () => {
         if (res.writableEnded) return;
         aborted = true;
         if (!abortController.signal.aborted) {
@@ -793,7 +793,7 @@ export default async function proxyRoutes(fastify) {
     const req = request.raw;
 
     // 客户端断连
-    req.on('close', () => {
+    res.on('close', () => {
       if (res.writableEnded) return;
       aborted = true;
       if (!abortController.signal.aborted) { try { abortController.abort(); } catch {} }
@@ -802,11 +802,8 @@ export default async function proxyRoutes(fastify) {
     try {
       // 5. 初始化
       const fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
-      console.log('[responses] before ensureInitialized');
       await ensureInitialized(ccKey, abortController.signal, fpOverrides);
-      console.log('[responses] before forwardToCC');
       const ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
-      console.log('[responses] forwardToCC returned', ccResponse.status);
 
       if (!ccResponse.ok) {
         const errorText = await ccResponse.text().catch(() => '');

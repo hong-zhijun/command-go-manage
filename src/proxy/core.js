@@ -336,12 +336,15 @@ export async function forwardToCC(ccBody, ccKey, signal) {
 
   if (config.ccZdr) headers['x-cmd-zdr'] = '1';
 
-  return fetch(url, {
+  const jsonBody = JSON.stringify(ccBody);
+
+  const resp = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(ccBody),
+    body: jsonBody,
     signal,
   });
+  return resp;
 }
 
 // ── 空闲看门狗 ──────────────────────────────────────
