@@ -79,14 +79,20 @@ export async function ensureInitialized(ccKey, signal, overrides = {}) {
     };
     const fingerprint = state.fingerprint || {};
 
+    // 10 秒超时，防止 DNS 解析慢或连接卡住时拖延主请求
+    const initSignal = AbortSignal.any([
+      AbortSignal.timeout(10_000),
+      ...(signal ? [signal] : []),
+    ]);
+
     await Promise.all([
       fetch(`${config.ccApiBase}/alpha/fingerprint/record`, {
-        method: 'POST', headers, signal,
+        method: 'POST', headers, signal: initSignal,
         body: JSON.stringify(fingerprint),
       }).catch(() => {}),
 
       fetch(`${config.ccApiBase}/alpha/lifecycle-events`, {
-        method: 'POST', headers, signal,
+        method: 'POST', headers, signal: initSignal,
         body: JSON.stringify({
           eventType: 'cli_session_exists',
           metadata: {

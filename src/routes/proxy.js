@@ -226,6 +226,16 @@ export default async function proxyRoutes(fastify) {
         const decoder = new TextDecoder();
         reader = ccResponse.body.getReader();
 
+        // 立即发 SSE header，防止 Cloudflare 524 超时
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Accel-Buffering': 'no',
+        });
+        res.write(': connected\n\n');
+        started = true;
+
         const idle = createIdleWatchdog(config.ccStreamIdleMs);
         try {
           while (true) {
@@ -245,20 +255,10 @@ export default async function proxyRoutes(fastify) {
             for (const line of lines) {
               const events = translator.parseLine(line);
               if (events) {
-                if (!started) {
-                  res.writeHead(200, {
-                    'Content-Type': 'text/event-stream',
-                    'Cache-Control': 'no-cache',
-                    'Connection': 'keep-alive',
-                    'X-Accel-Buffering': 'no',
-                  });
-                  started = true;
-                }
                 for (const evt of events) res.write(evt);
                 lastKeepaliveAt = Date.now();
                 await waitDrain(res);
-              } else if (started && line.trim() && Date.now() - lastKeepaliveAt > 15000) {
-                // 信号事件未产生输出——按时间节流发 keepalive 注释防止下游超时
+              } else if (line.trim() && Date.now() - lastKeepaliveAt > 15000) {
                 res.write(': keepalive\n\n');
                 lastKeepaliveAt = Date.now();
               }
@@ -270,25 +270,17 @@ export default async function proxyRoutes(fastify) {
             if (buffer.trim()) {
               const events = translator.parseLine(buffer);
               if (events) {
-                if (!started) started = true;
                 for (const evt of events) res.write(evt);
                 await waitDrain(res);
               }
             }
 
             if (translator.upstreamError) {
-              if (!started) {
-                sendJsonRaw(res, translator.upstreamError.status, translator.upstreamError.body);
-              }
+              // header 已发，错误通过 SSE 数据发送
+              try { res.write(`data: ${JSON.stringify(translator.upstreamError.body)}\n\n`); } catch {}
             } else if (!translator.hadOutput) {
-              if (!started) {
-                sendJsonRaw(res, 429, { error: { message: 'Empty response (zero output tokens)', type: 'rate_limit_error' }, retry_after: 10 });
-              }
+              try { res.write(`data: ${JSON.stringify({ error: { message: 'Empty response (zero output tokens)', type: 'rate_limit_error' }, retry_after: 10 })}\n\n`); } catch {}
             } else {
-              if (!started) {
-                res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-                started = true;
-              }
               res.write(translator.getDoneEvent());
             }
             resetTimeouts(user.apiKeyId);
@@ -301,13 +293,13 @@ export default async function proxyRoutes(fastify) {
             const timeoutMsg = getTimeouts(user.apiKeyId) >= TIMEOUT_REDUCE_CONTEXT_THRESHOLD
               ? 'Response timeout - try reducing context length (summarize earlier messages)'
               : 'Response timeout - request timed out';
-            if (!started) {
-              sendJsonRaw(res, 429, { error: { message: timeoutMsg, type: 'rate_limit_error' }, retry_after: 5 });
+            if (!res.writableEnded) {
+              try { res.write(`data: ${JSON.stringify({ error: { message: timeoutMsg, type: 'rate_limit_error' }, retry_after: 5 })}\n\n`); } catch {}
             }
           } else if (!aborted) {
             try { abortController.abort(); } catch {}
-            if (!started) {
-              sendJsonRaw(res, 502, { error: { message: `Upstream error: ${e.message}`, type: 'proxy_error' }, retry_after: 10 });
+            if (!res.writableEnded) {
+              try { res.write(`data: ${JSON.stringify({ error: { message: `Upstream error: ${e.message}`, type: 'proxy_error' }, retry_after: 10 })}\n\n`); } catch {}
             }
           }
         } finally {
@@ -531,23 +523,16 @@ export default async function proxyRoutes(fastify) {
           'X-Accel-Buffering': 'no',
         };
 
-        // message_start 先缓冲，首个内容到达时统一冲刷
-        buf.push(translator.getMessageStart());
-
-        const flushBuf = async () => {
-          if (!started) {
-            res.writeHead(200, SSE_HEADERS);
-            started = true;
-          }
-          for (const ev of buf) { try { res.write(ev); } catch {} }
-          buf.length = 0;
-          await waitDrain(res);
-        };
+        // 立即发 SSE header + message_start，防止 Cloudflare 524 超时
+        res.writeHead(200, SSE_HEADERS);
+        res.write(translator.getMessageStart());
+        started = true;
+        buf.length = 0;
 
         // 心跳：Anthropic 标准 ping 事件，覆盖长 thinking 的静默窗口
         let lastSentAt = Date.now();
         const heartbeat = setInterval(() => {
-          if (started && !aborted && !res.writableEnded && !res.writableNeedDrain && Date.now() - lastSentAt > 15000) {
+          if (!aborted && !res.writableEnded && !res.writableNeedDrain && Date.now() - lastSentAt > 15000) {
             try { res.write('event: ping\ndata: {"type":"ping"}\n\n'); lastSentAt = Date.now(); } catch {}
           }
         }, 5000);
@@ -571,8 +556,6 @@ export default async function proxyRoutes(fastify) {
             for (const line of lines) {
               const events = translator.parseLine(line);
               if (events) {
-                // 首个内容事件到达——冲刷 message_start 并发送 header
-                if (!started) await flushBuf();
                 for (const evt of events) { try { res.write(evt); } catch {} }
                 lastSentAt = Date.now();
                 await waitDrain(res);
@@ -582,26 +565,20 @@ export default async function proxyRoutes(fastify) {
           }
 
           if (!aborted) {
-            // 处理残余 buffer
             if (buffer.trim()) {
               const events = translator.parseLine(buffer);
               if (events) {
-                if (!started) await flushBuf();
                 for (const evt of events) { try { res.write(evt); } catch {} }
                 await waitDrain(res);
               }
             }
 
             if (translator.upstreamError) {
-              if (!started) {
-                sendAnthropicError(res, translator.upstreamError.status,
-                  translator.upstreamError.body.error.type, translator.upstreamError.body.error.message);
-              }
-            } else if (translator.outputTokens === 0 && !started) {
+              try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: translator.upstreamError.body.error })}\n\n`); } catch {}
+            } else if (translator.outputTokens === 0) {
               try { abortController.abort(); } catch {}
-              sendAnthropicError(res, 429, 'rate_limit_error', 'Empty response from upstream (zero output tokens)', 10);
+              try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'Empty response from upstream (zero output tokens)' }, retry_after: 10 })}\n\n`); } catch {}
             } else {
-              await flushBuf();
               const finishEvents = translator.finish();
               for (const evt of finishEvents) { try { res.write(evt); } catch {} }
             }
@@ -617,16 +594,12 @@ export default async function proxyRoutes(fastify) {
             const timeoutMsg = getTimeouts(user.apiKeyId) >= TIMEOUT_REDUCE_CONTEXT_THRESHOLD
               ? 'Response timeout - try reducing context length (summarize earlier messages)'
               : 'Response timeout - request timed out';
-            if (!started) {
-              sendAnthropicError(res, 429, 'rate_limit_error', timeoutMsg);
-            } else if (!res.writableEnded) {
+            if (!res.writableEnded) {
               try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: timeoutMsg }, retry_after: 5 })}\n\n`); } catch {}
             }
           } else {
             try { abortController.abort(); } catch {}
-            if (!started) {
-              sendAnthropicError(res, 502, 'proxy_error', `Upstream error: ${e.message}`, 10);
-            } else if (!res.writableEnded) {
+            if (!res.writableEnded) {
               try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'internal_error', message: e.message } })}\n\n`); } catch {}
             }
           }
@@ -857,8 +830,14 @@ export default async function proxyRoutes(fastify) {
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no',
         };
+
+        // 上游已连通，立即发 SSE header + 注释，告诉 Cloudflare 连接有效，
+        // 防止 CC 推理时间长导致 TTFB 超过 Cloudflare 的 100 秒超时 (524)。
+        res.writeHead(200, SSE_HEADERS);
+        res.write(': connected\n\n');
+        started = true;
+
         const writeEvents = async (evts) => {
-          if (!started) { res.writeHead(200, SSE_HEADERS); started = true; }
           for (const e of evts) res.write(e);
           await waitDrain(res);
         };
@@ -893,19 +872,12 @@ export default async function proxyRoutes(fastify) {
             }
 
             if (translator.upstreamError) {
-              if (!started) {
-                sendResponsesError(res, translator.upstreamError.status,
-                  translator.upstreamError.body.error.type, translator.upstreamError.body.error.message,
-                  translator.upstreamError.body.retry_after);
-              } else {
-                const failed = translator.fail(translator.upstreamError.body.error.message);
-                if (failed.length) await writeEvents(failed);
-              }
+              const failed = translator.fail(translator.upstreamError.body.error.message);
+              if (failed.length) await writeEvents(failed);
             } else if (translator.outputTokens === 0 && !translator.started) {
               try { if (!abortController.signal.aborted) abortController.abort(); } catch {}
-              sendResponsesError(res, 429, 'rate_limit_error', 'Empty response from upstream (zero output tokens)', 10);
+              try { res.write(translator.errorEvent('Empty response from upstream (zero output tokens)')); } catch {}
             } else {
-              if (!started) { res.writeHead(200, SSE_HEADERS); started = true; }
               for (const e of translator.finish()) res.write(e);
             }
             resetTimeouts(user.apiKeyId);
@@ -920,16 +892,12 @@ export default async function proxyRoutes(fastify) {
             const timeoutMsg = getTimeouts(user.apiKeyId) >= TIMEOUT_REDUCE_CONTEXT_THRESHOLD
               ? 'Response timeout - try reducing context length (summarize earlier messages)'
               : 'Response timeout - request timed out';
-            if (!started) {
-              sendResponsesError(res, 429, 'rate_limit_error', timeoutMsg, 5);
-            } else if (!res.writableEnded) {
+            if (!res.writableEnded) {
               try { res.write(translator.errorEvent(timeoutMsg)); } catch {}
             }
           } else {
             try { abortController.abort(); } catch {}
-            if (!started) {
-              sendResponsesError(res, 502, 'proxy_error', `Upstream error: ${e.message}`, 10);
-            } else if (!res.writableEnded) {
+            if (!res.writableEnded) {
               try { res.write(translator.errorEvent(e.message)); } catch {}
             }
           }

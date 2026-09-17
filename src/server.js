@@ -51,6 +51,17 @@ async function main() {
 
   await app.register(fastifyFormbody);
 
+  // 兼容旧 proxy 行为：不管 Content-Type 是什么都尝试按 JSON 解析请求体。
+  // 部分 AI 客户端发 text/plain 或不带 Content-Type，Fastify 默认不解析会导致 400。
+  app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+    try {
+      const json = body ? JSON.parse(body) : undefined;
+      done(null, json);
+    } catch {
+      done(null, body);
+    }
+  });
+
   await app.register(fastifyJwt, {
     secret: config.jwtSecret,
     sign: { expiresIn: config.jwtExpiresIn },
