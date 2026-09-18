@@ -177,6 +177,7 @@ export default async function proxyRoutes(fastify) {
     let translator = null;
     let reader = null;
     let fullText = '';
+    let streamStatus = 'ok';
 
     const res = reply.raw;
     const req = request.raw;
@@ -287,6 +288,7 @@ export default async function proxyRoutes(fastify) {
           }
         } catch (e) {
           if (e.message === 'STREAM_IDLE_TIMEOUT') {
+            streamStatus = 'timeout';
             try { reader.cancel(); } catch {}
             try { abortController.abort(); } catch {}
             bumpTimeouts(user.apiKeyId);
@@ -297,6 +299,7 @@ export default async function proxyRoutes(fastify) {
               try { res.write(`data: ${JSON.stringify({ error: { message: timeoutMsg, type: 'rate_limit_error' }, retry_after: 5 })}\n\n`); } catch {}
             }
           } else if (!aborted) {
+            streamStatus = 'error';
             try { abortController.abort(); } catch {}
             if (!res.writableEnded) {
               try { res.write(`data: ${JSON.stringify({ error: { message: `Upstream error: ${e.message}`, type: 'proxy_error' }, retry_after: 10 })}\n\n`); } catch {}
@@ -308,9 +311,17 @@ export default async function proxyRoutes(fastify) {
 
         if (!res.writableEnded) res.end();
 
+        if (aborted && streamStatus === 'ok') streamStatus = 'abort';
+        if (translator?.upstreamError && streamStatus === 'ok') streamStatus = 'error';
+        const ctx = streamContext(startTime, bytesReceived, lastCcEvent);
+        const errMsg = streamStatus === 'ok' ? ''
+          : streamStatus === 'timeout' ? `idle_timeout [${ctx}]`
+          : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
+          : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
+
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
-          Date.now() - startTime, translator?.upstreamError ? 'error' : 'ok');
+          Date.now() - startTime, streamStatus, errMsg);
       } else {
         // ── 非流式响应 ──
         let reasoningContent = '';
@@ -467,6 +478,7 @@ export default async function proxyRoutes(fastify) {
     let lastCcEvent = '';
     let reader = null;
     let translator = null;
+    let streamStatus = 'ok';
 
     const res = reply.raw;
     const req = request.raw;
@@ -588,6 +600,7 @@ export default async function proxyRoutes(fastify) {
           if (aborted) {
             // 客户端已断连
           } else if (e.message === 'STREAM_IDLE_TIMEOUT') {
+            streamStatus = 'timeout';
             try { reader.cancel(); } catch {}
             try { abortController.abort(); } catch {}
             bumpTimeouts(user.apiKeyId);
@@ -598,6 +611,7 @@ export default async function proxyRoutes(fastify) {
               try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: timeoutMsg }, retry_after: 5 })}\n\n`); } catch {}
             }
           } else {
+            streamStatus = 'error';
             try { abortController.abort(); } catch {}
             if (!res.writableEnded) {
               try { res.write(`event: error\ndata: ${JSON.stringify({ type: 'error', error: { type: 'internal_error', message: e.message } })}\n\n`); } catch {}
@@ -610,9 +624,17 @@ export default async function proxyRoutes(fastify) {
 
         if (!res.writableEnded) res.end();
 
+        if (aborted && streamStatus === 'ok') streamStatus = 'abort';
+        if (translator?.upstreamError && streamStatus === 'ok') streamStatus = 'error';
+        const ctx = streamContext(startTime, bytesReceived, lastCcEvent);
+        const errMsg = streamStatus === 'ok' ? ''
+          : streamStatus === 'timeout' ? `idle_timeout [${ctx}]`
+          : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
+          : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
+
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
-          Date.now() - startTime, translator?.upstreamError ? 'error' : 'ok');
+          Date.now() - startTime, streamStatus, errMsg);
       } else {
         // ── 非流式 Anthropic JSON ──
         let fullText = '';
@@ -788,6 +810,7 @@ export default async function proxyRoutes(fastify) {
     let lastCcEvent = '';
     let reader = null;
     let translator = null;
+    let streamStatus = 'ok';
 
     const res = reply.raw;
     const req = request.raw;
@@ -884,6 +907,7 @@ export default async function proxyRoutes(fastify) {
           if (aborted) {
             try { reader.cancel(); } catch {}
           } else if (e.message === 'STREAM_IDLE_TIMEOUT') {
+            streamStatus = 'timeout';
             try { reader.cancel(); } catch {}
             try { abortController.abort(); } catch {}
             bumpTimeouts(user.apiKeyId);
@@ -894,6 +918,7 @@ export default async function proxyRoutes(fastify) {
               try { res.write(translator.errorEvent(timeoutMsg)); } catch {}
             }
           } else {
+            streamStatus = 'error';
             try { abortController.abort(); } catch {}
             if (!res.writableEnded) {
               try { res.write(translator.errorEvent(e.message)); } catch {}
@@ -905,9 +930,17 @@ export default async function proxyRoutes(fastify) {
 
         if (!res.writableEnded) res.end();
 
+        if (aborted && streamStatus === 'ok') streamStatus = 'abort';
+        if (translator?.upstreamError && streamStatus === 'ok') streamStatus = 'error';
+        const ctx = streamContext(startTime, bytesReceived, lastCcEvent);
+        const errMsg = streamStatus === 'ok' ? ''
+          : streamStatus === 'timeout' ? `idle_timeout [${ctx}]`
+          : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
+          : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
+
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
-          Date.now() - startTime, translator?.upstreamError ? 'error' : 'ok');
+          Date.now() - startTime, streamStatus, errMsg);
       } else {
         // ── 非流式 Responses JSON ──
         let fullText = '';
@@ -1018,6 +1051,10 @@ export default async function proxyRoutes(fastify) {
   // ── GET /health ──
 
   fastify.get('/health', async () => ({ status: 'ok', timestamp: Date.now() }));
+}
+
+function streamContext(startTime, bytesReceived, lastCcEvent) {
+  return `${((Date.now() - startTime) / 1000).toFixed(1)}s, ${bytesReceived}B, last=${lastCcEvent || 'none'}`;
 }
 
 function logUsage(user, ccKeyRow, model, inputTokens, outputTokens, cachedTokens, latencyMs, status, errorMessage) {

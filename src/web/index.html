@@ -229,6 +229,8 @@
   .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .status-dot.ok { background: var(--green); }
   .status-dot.error { background: var(--red); }
+  .status-dot.timeout { background: var(--yellow); }
+  .status-dot.abort { background: #9ca3af; }
 
   /* ── Toast 通知 ── */
   .toast-container { position: fixed; top: 68px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 8px; }
@@ -304,6 +306,7 @@
       <div class="tab" data-tab="keys">API Key</div>
       <div class="tab" data-tab="cc-pool">CC 账号池</div>
       <div class="tab" data-tab="logs">请求日志</div>
+      <div class="tab" data-tab="errors">错误日志</div>
     </div>
 
     <!-- ═══ 概览 ═══ -->
@@ -448,6 +451,8 @@
             <option value="">全部状态</option>
             <option value="ok">成功</option>
             <option value="error">失败</option>
+            <option value="timeout">超时</option>
+            <option value="abort">断连</option>
           </select>
           <button class="btn-secondary" onclick="loadLogs(1)" style="padding:6px 14px;font-size:12px">搜索</button>
         </div>
@@ -458,6 +463,32 @@
           </table>
         </div>
         <div class="pagination" id="logs-pagination"></div>
+      </div>
+    </div>
+
+    <!-- ═══ 错误日志 ═══ -->
+    <div class="tab-content" id="tab-errors">
+      <div class="card">
+        <div class="card-header">
+          <h3>错误日志</h3>
+        </div>
+        <div class="filter-row">
+          <select id="err-filter-status">
+            <option value="">全部异常</option>
+            <option value="error">error</option>
+            <option value="timeout">timeout</option>
+            <option value="abort">abort</option>
+          </select>
+          <select id="err-filter-model"><option value="">全部模型</option></select>
+          <button class="btn-secondary" onclick="loadErrorLogs(1)" style="padding:6px 14px;font-size:12px">搜索</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>时间</th><th>用户</th><th>模型</th><th>耗时</th><th>状态</th><th>CC Key</th><th style="min-width:200px">错误信息</th></tr></thead>
+            <tbody id="errors-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="errors-pagination"></div>
       </div>
     </div>
   </div>
@@ -541,8 +572,9 @@ document.getElementById('tabs').addEventListener('click', e => {
   document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
   document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
-  // 切到日志 tab 时加载数据
+  // 切到日志/错误 tab 时加载数据
   if (tab.dataset.tab === 'logs') loadLogs(1);
+  if (tab.dataset.tab === 'errors') loadErrorLogs(1);
 });
 
 // ── 图表时间范围切换 ──
@@ -1047,7 +1079,7 @@ async function loadLogs(page) {
         <td>${fmtNum(l.cached_tokens)}</td>
         <td>${fmtNum(l.output_tokens)}</td>
         <td>${l.latency_ms ? (l.latency_ms / 1000).toFixed(1) + 's' : '-'}</td>
-        <td><span class="status-dot ${l.status}"></span>${l.status}</td>
+        <td title="${esc(l.error_message || '')}"><span class="status-dot ${l.status}"></span>${l.status}</td>
         <td style="font-size:12px;color:var(--text-dim)">${esc(l.cc_label || '-')}</td>
       </tr>
     `).join('');
@@ -1057,6 +1089,68 @@ async function loadLogs(page) {
       <button onclick="loadLogs(${logPage - 1})" ${logPage <= 1 ? 'disabled' : ''}>← 上一页</button>
       <span>${logPage} / ${data.totalPages || 1}</span>
       <button onclick="loadLogs(${logPage + 1})" ${logPage >= data.totalPages ? 'disabled' : ''}>下一页 →</button>
+    `;
+  } catch {}
+}
+
+// ── 错误日志 ──
+
+let errPage = 1;
+let errModelsLoaded = false;
+
+async function loadErrorModels() {
+  if (errModelsLoaded) return;
+  try {
+    const data = await api('/api/admin/logs/models');
+    const sel = document.getElementById('err-filter-model');
+    (data.models || []).forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m;
+      sel.appendChild(opt);
+    });
+    errModelsLoaded = true;
+  } catch {}
+}
+
+async function loadErrorLogs(page) {
+  errPage = page || 1;
+  await loadErrorModels();
+  const statusVal = document.getElementById('err-filter-status').value;
+  const model = document.getElementById('err-filter-model').value;
+  const params = new URLSearchParams({ page: errPage, limit: 30 });
+  if (statusVal) {
+    params.set('status', statusVal);
+  } else {
+    params.set('status', 'error,timeout,abort');
+  }
+  if (model) params.set('model', model);
+
+  try {
+    const data = await api('/api/admin/logs?' + params);
+    const tbody = document.getElementById('errors-tbody');
+    const logs = data.logs || [];
+    if (logs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无错误记录</td></tr>';
+      document.getElementById('errors-pagination').innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = logs.map(l => `
+      <tr>
+        <td style="white-space:nowrap">${fmtTime(l.created_at)}</td>
+        <td>${esc(l.username || '-')}</td>
+        <td style="font-size:12px">${esc(l.model || '-')}</td>
+        <td>${l.latency_ms ? (l.latency_ms / 1000).toFixed(1) + 's' : '-'}</td>
+        <td><span class="status-dot ${l.status}"></span>${l.status}</td>
+        <td style="font-size:12px;color:var(--text-dim)">${esc(l.cc_label || '-')}</td>
+        <td style="font-size:12px;word-break:break-all;max-width:400px">${esc(l.error_message || '-')}</td>
+      </tr>
+    `).join('');
+
+    const pg = document.getElementById('errors-pagination');
+    pg.innerHTML = `
+      <button onclick="loadErrorLogs(${errPage - 1})" ${errPage <= 1 ? 'disabled' : ''}>← 上一页</button>
+      <span>${errPage} / ${data.totalPages || 1}</span>
+      <button onclick="loadErrorLogs(${errPage + 1})" ${errPage >= data.totalPages ? 'disabled' : ''}>下一页 →</button>
     `;
   } catch {}
 }

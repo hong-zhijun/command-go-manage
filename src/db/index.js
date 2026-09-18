@@ -351,14 +351,23 @@ export function queryUsageLogs({ offset = 0, limit = 50, model, status, since, u
   const conditions = [];
   const params = [];
 
-  if (model)  { conditions.push('model = ?');        params.push(model); }
-  if (status) { conditions.push('status = ?');       params.push(status); }
-  if (since)  { conditions.push('created_at >= ?');  params.push(since); }
-  if (until)  { conditions.push('created_at <= ?');  params.push(until); }
+  if (model)  { conditions.push('ul.model = ?');        params.push(model); }
+  if (status) {
+    const statuses = status.split(',').filter(Boolean);
+    if (statuses.length === 1) {
+      conditions.push('ul.status = ?');
+      params.push(statuses[0]);
+    } else if (statuses.length > 1) {
+      conditions.push(`ul.status IN (${statuses.map(() => '?').join(',')})`);
+      params.push(...statuses);
+    }
+  }
+  if (since)  { conditions.push('ul.created_at >= ?');  params.push(since); }
+  if (until)  { conditions.push('ul.created_at <= ?');  params.push(until); }
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
 
-  const total = getDb().prepare(`SELECT COUNT(*) AS cnt FROM usage_logs ${where}`).get(...params).cnt;
+  const total = getDb().prepare(`SELECT COUNT(*) AS cnt FROM usage_logs ul ${where}`).get(...params).cnt;
 
   const rows = getDb().prepare(`
     SELECT ul.*, u.username, ak.key_prefix, ak.name AS api_key_name, ck.label AS cc_label
