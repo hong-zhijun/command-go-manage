@@ -477,7 +477,8 @@ let currentRange = '7d';
 // ── API 请求 ──
 
 async function api(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  const headers = { ...(opts.headers || {}) };
+  if (opts.body) headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   if (token) headers['Authorization'] = 'Bearer ' + token;
   const res = await fetch(API + path, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
@@ -614,8 +615,9 @@ async function loadCharts() {
 
 function formatTs(ts, range) {
   const d = new Date(ts);
-  if (range === '24h') return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
-  return (d.getMonth() + 1) + '/' + d.getDate();
+  const tz = { timeZone: 'Asia/Shanghai' };
+  if (range === '24h') return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false, ...tz });
+  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', ...tz });
 }
 
 function renderCallsChart(series) {
@@ -1074,7 +1076,7 @@ function toast(msg, type = 'success', duration = 3000) {
 
 function fmtQuota(n) { return n == null ? '0' : (Number.isInteger(n) ? String(n) : Number(n).toFixed(2)); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-function fmtTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false }) : '-'; }
+function fmtTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '-'; }
 function fmtNum(n) {
   if (n == null) return '0';
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';

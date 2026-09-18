@@ -272,6 +272,14 @@ export function getSystemUsageStats(since) {
   `).get(since || 0);
 }
 
+// ── UTC+8 时间工具 ────────────────────────────────
+
+const UTC8_MS = 8 * 3600000;
+
+export function startOfDayUTC8(ts = Date.now()) {
+  return Math.floor((ts + UTC8_MS) / 86400000) * 86400000 - UTC8_MS;
+}
+
 // ── 时序聚合（图表用） ──────────────────────────────
 
 /**
@@ -296,13 +304,14 @@ export function getHourlyStats(sinceMs) {
 }
 
 /**
- * 按天聚合请求量 & token（最近 N 毫秒）
+ * 按天聚合请求量 & token（最近 N 毫秒），按 UTC+8 日界分组
  */
 export function getDailyStats(sinceMs) {
   const since = Date.now() - sinceMs;
+  const offset = UTC8_MS;
   return getDb().prepare(`
     SELECT
-      CAST((created_at / 86400000) AS INTEGER) * 86400000 AS day_ts,
+      (CAST(((created_at + ${offset}) / 86400000) AS INTEGER) * 86400000 - ${offset}) AS day_ts,
       COUNT(*)                       AS calls,
       SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) AS ok_calls,
       SUM(CASE WHEN status='error' THEN 1 ELSE 0 END) AS err_calls,

@@ -1,7 +1,7 @@
 /**
  * 用户面板路由 — 个人用量统计
  */
-import { getUserUsageStats, findApiKeysByUser } from '../db/index.js';
+import { getUserUsageStats, findApiKeysByUser, startOfDayUTC8 } from '../db/index.js';
 
 export default async function dashboardRoutes(fastify) {
   fastify.addHook('preHandler', fastify.authenticate);
@@ -10,8 +10,9 @@ export default async function dashboardRoutes(fastify) {
   fastify.get('/api/dashboard', async (request) => {
     const userId = request.user.id;
     const now = Date.now();
+    const todayStart = startOfDayUTC8(now);
 
-    const today = getUserUsageStats(userId, now - 24 * 60 * 60 * 1000);
+    const today = getUserUsageStats(userId, todayStart);
     const week = getUserUsageStats(userId, now - 7 * 24 * 60 * 60 * 1000);
     const month = getUserUsageStats(userId, now - 30 * 24 * 60 * 60 * 1000);
     const keys = findApiKeysByUser(userId);

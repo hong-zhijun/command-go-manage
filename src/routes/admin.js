@@ -6,7 +6,7 @@ import {
   updateCcKeyDispatch, findCcKeyById,
   getSystemUsageStats, findAllApiKeys,
   getHourlyStats, getDailyStats, getModelDistribution,
-  queryUsageLogs, getDistinctModels,
+  queryUsageLogs, getDistinctModels, startOfDayUTC8,
 } from '../db/index.js';
 import { syncCcKey, syncAllCcKeys, fetchKeyReport } from '../pool/quota-sync.js';
 import { getDeviceSummary, TIMEZONE_OPTIONS } from '../proxy/fingerprint.js';
@@ -183,7 +183,7 @@ export default async function adminRoutes(fastify) {
   // GET /api/admin/stats
   fastify.get('/api/admin/stats', async () => {
     const now = Date.now();
-    const today = getSystemUsageStats(now - 24 * 60 * 60 * 1000);
+    const today = getSystemUsageStats(startOfDayUTC8(now));
     const week = getSystemUsageStats(now - 7 * 24 * 60 * 60 * 1000);
     const ccKeys = listCcKeys();
 
