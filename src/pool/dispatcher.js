@@ -108,3 +108,10 @@ export function acquireCcKey(ccKeyId) {
 export function releaseCcKey(ccKeyId) {
   updateCcKeyInflight(ccKeyId, -1);
 }
+
+/**
+ * 清除某个 stickyHint 的粘性映射（key 不可用时强制重新选路）
+ */
+export function clearSticky(stickyHint) {
+  if (stickyHint != null) stickyMap.delete(stickyHint);
+}

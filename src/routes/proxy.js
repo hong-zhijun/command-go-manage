@@ -9,7 +9,8 @@
 import { randomUUID } from 'crypto';
 import config from '../config.js';
 import { extractApiKey, validateApiKey } from '../auth/api-key.js';
-import { pickCcKey, acquireCcKey, releaseCcKey } from '../pool/dispatcher.js';
+import { pickCcKey, acquireCcKey, releaseCcKey, clearSticky } from '../pool/dispatcher.js';
+import { updateCcKeyStatus } from '../db/index.js';
 import { buildCcRequest, forwardToCC, ensureInitialized, createIdleWatchdog, waitDrain } from '../proxy/core.js';
 import {
   createSseTranslator, mapCcError, normalizeUsage, mapFinishReason,
@@ -105,6 +106,20 @@ function getTimeouts(apiKeyId) { return timeoutCounters.get(apiKeyId) || 0; }
 function bumpTimeouts(apiKeyId) { timeoutCounters.set(apiKeyId, getTimeouts(apiKeyId) + 1); }
 function resetTimeouts(apiKeyId) { timeoutCounters.delete(apiKeyId); }
 
+const CREDITS_EXHAUSTED_RE = /insufficient credits|credits.*expired|out of credits/i;
+
+function isCreditExhausted(status, errorMsg) {
+  if (status === 400 && CREDITS_EXHAUSTED_RE.test(errorMsg || '')) return true;
+  if (status === 402) return true;
+  return false;
+}
+
+function markKeyExhausted(ccKeyRow, stickyHint) {
+  updateCcKeyStatus(ccKeyRow.id, 'exhausted', 'insufficient credits');
+  clearSticky(stickyHint);
+  console.log(`[proxy] CC Key #${ccKeyRow.id} (${ccKeyRow.label}) marked exhausted, sticky cleared`);
+}
+
 // ── 公共鉴权（不含选 Key，避免畸形请求污染 stickyMap）──
 
 function authenticate(request) {
@@ -156,11 +171,11 @@ export default async function proxyRoutes(fastify) {
     }
 
     // 3. 选 CC Key（sticky 路由）
-    const ccKeyRow = pickCcKey(user.apiKeyId);
+    let ccKeyRow = pickCcKey(user.apiKeyId);
     if (!ccKeyRow) {
       return reply.code(503).send({ error: { message: 'No available CC keys in pool', type: 'server_error' } });
     }
-    const ccKey = ccKeyRow.api_key;
+    let ccKey = ccKeyRow.api_key;
     const stream = openaiReq.stream === true;
     const model = openaiReq.model || 'deepseek/deepseek-v4-flash';
     const completionId = `chatcmpl-${randomUUID().slice(0, 12)}`;
@@ -184,22 +199,49 @@ export default async function proxyRoutes(fastify) {
 
     try {
       // 4. 初始化
-      const fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+      let fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
       await ensureInitialized(ccKey, abortController.signal, fpOverrides);
 
       // 5. 构建 CC 请求体
       const ccBody = buildCcRequest(openaiReq);
 
-      // 6. 转发
-      const ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+      // 6. 转发（额度不足时自动换 key 重试一次）
+      let ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
 
       if (!ccResponse.ok) {
         const errorText = await ccResponse.text().catch(() => '');
         const mapped = mapCcError(ccResponse.status, errorText);
-        logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
-        releaseCcKey(ccKeyRow.id);
-        sendJsonRaw(res, mapped.status, mapped.body);
-        return reply.hijack();
+
+        if (isCreditExhausted(ccResponse.status, mapped.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+          releaseCcKey(ccKeyRow.id);
+          const newKeyRow = pickCcKey(user.apiKeyId);
+          if (newKeyRow) {
+            ccKeyRow = newKeyRow;
+            ccKey = newKeyRow.api_key;
+            acquireCcKey(ccKeyRow.id);
+            fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+            await ensureInitialized(ccKey, abortController.signal, fpOverrides);
+            ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+            if (!ccResponse.ok) {
+              const retryText = await ccResponse.text().catch(() => '');
+              const retryMapped = mapCcError(ccResponse.status, retryText);
+              logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', retryMapped.body?.error?.message);
+              releaseCcKey(ccKeyRow.id);
+              sendJsonRaw(res, retryMapped.status, retryMapped.body);
+              return reply.hijack();
+            }
+          } else {
+            logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+            sendJsonRaw(res, mapped.status, mapped.body);
+            return reply.hijack();
+          }
+        } else {
+          logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+          releaseCcKey(ccKeyRow.id);
+          sendJsonRaw(res, mapped.status, mapped.body);
+          return reply.hijack();
+        }
       }
 
       // 客户端断连处理
@@ -453,12 +495,12 @@ export default async function proxyRoutes(fastify) {
     }
 
     // 3. 选 CC Key（sticky 路由）
-    const ccKeyRow = pickCcKey(user.apiKeyId);
+    let ccKeyRow = pickCcKey(user.apiKeyId);
     if (!ccKeyRow) {
       sendAnthropicError(reply.raw, 503, 'server_error', 'No available CC keys in pool');
       return reply.hijack();
     }
-    const ccKey = ccKeyRow.api_key;
+    let ccKey = ccKeyRow.api_key;
     const stream = anthropicReq.stream === true;
     const model = anthropicReq.model || 'claude-sonnet-4-6';
     const messageId = `msg_${randomUUID().slice(0, 12)}`;
@@ -485,19 +527,46 @@ export default async function proxyRoutes(fastify) {
 
     try {
       // 6. 初始化
-      const fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+      let fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
       await ensureInitialized(ccKey, abortController.signal, fpOverrides);
 
-      // 7. 转发
-      const ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+      // 7. 转发（额度不足时自动换 key 重试一次）
+      let ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
 
       if (!ccResponse.ok) {
         const errorText = await ccResponse.text().catch(() => '');
         const mapped = mapCcError(ccResponse.status, errorText);
-        logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
-        releaseCcKey(ccKeyRow.id);
-        sendAnthropicError(res, mapped.status, mapped.body.error.type, mapped.body.error.message);
-        return reply.hijack();
+
+        if (isCreditExhausted(ccResponse.status, mapped.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+          releaseCcKey(ccKeyRow.id);
+          const newKeyRow = pickCcKey(user.apiKeyId);
+          if (newKeyRow) {
+            ccKeyRow = newKeyRow;
+            ccKey = newKeyRow.api_key;
+            acquireCcKey(ccKeyRow.id);
+            fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+            await ensureInitialized(ccKey, abortController.signal, fpOverrides);
+            ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+            if (!ccResponse.ok) {
+              const retryText = await ccResponse.text().catch(() => '');
+              const retryMapped = mapCcError(ccResponse.status, retryText);
+              logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', retryMapped.body?.error?.message);
+              releaseCcKey(ccKeyRow.id);
+              sendAnthropicError(res, retryMapped.status, retryMapped.body.error.type, retryMapped.body.error.message);
+              return reply.hijack();
+            }
+          } else {
+            logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+            sendAnthropicError(res, mapped.status, mapped.body.error.type, mapped.body.error.message);
+            return reply.hijack();
+          }
+        } else {
+          logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+          releaseCcKey(ccKeyRow.id);
+          sendAnthropicError(res, mapped.status, mapped.body.error.type, mapped.body.error.message);
+          return reply.hijack();
+        }
       }
 
       // 客户端断连处理
@@ -777,12 +846,12 @@ export default async function proxyRoutes(fastify) {
     }
 
     // 4. 选 CC Key（sticky 路由）
-    const ccKeyRow = pickCcKey(user.apiKeyId);
+    let ccKeyRow = pickCcKey(user.apiKeyId);
     if (!ccKeyRow) {
       sendResponsesError(reply.raw, 503, 'server_error', 'No available CC keys in pool');
       return reply.hijack();
     }
-    const ccKey = ccKeyRow.api_key;
+    let ccKey = ccKeyRow.api_key;
     const stream = chatReq.stream === true;
     const model = chatReq.model || 'deepseek/deepseek-v4-flash';
     const responseId = 'resp_' + randomUUID().replace(/-/g, '').slice(0, 24);
@@ -824,17 +893,44 @@ export default async function proxyRoutes(fastify) {
 
     try {
       // 5. 初始化
-      const fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+      let fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
       await ensureInitialized(ccKey, abortController.signal, fpOverrides);
-      const ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+      let ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
 
       if (!ccResponse.ok) {
         const errorText = await ccResponse.text().catch(() => '');
         const mapped = mapCcError(ccResponse.status, errorText);
-        logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
-        releaseCcKey(ccKeyRow.id);
-        sendResponsesError(res, mapped.status, mapped.body.error.type, mapped.body.error.message, mapped.body.retry_after);
-        return reply.hijack();
+
+        if (isCreditExhausted(ccResponse.status, mapped.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+          releaseCcKey(ccKeyRow.id);
+          const newKeyRow = pickCcKey(user.apiKeyId);
+          if (newKeyRow) {
+            ccKeyRow = newKeyRow;
+            ccKey = newKeyRow.api_key;
+            acquireCcKey(ccKeyRow.id);
+            fpOverrides = ccKeyRow.timezone_override ? { timezone: ccKeyRow.timezone_override } : {};
+            await ensureInitialized(ccKey, abortController.signal, fpOverrides);
+            ccResponse = await forwardToCC(ccBody, ccKey, abortController.signal);
+            if (!ccResponse.ok) {
+              const retryText = await ccResponse.text().catch(() => '');
+              const retryMapped = mapCcError(ccResponse.status, retryText);
+              logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', retryMapped.body?.error?.message);
+              releaseCcKey(ccKeyRow.id);
+              sendResponsesError(res, retryMapped.status, retryMapped.body.error.type, retryMapped.body.error.message, retryMapped.body.retry_after);
+              return reply.hijack();
+            }
+          } else {
+            logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+            sendResponsesError(res, mapped.status, mapped.body.error.type, mapped.body.error.message, mapped.body.retry_after);
+            return reply.hijack();
+          }
+        } else {
+          logUsage(user, ccKeyRow, model, 0, 0, 0, Date.now() - startTime, 'error', mapped.body?.error?.message);
+          releaseCcKey(ccKeyRow.id);
+          sendResponsesError(res, mapped.status, mapped.body.error.type, mapped.body.error.message, mapped.body.retry_after);
+          return reply.hijack();
+        }
       }
 
       if (stream) {
