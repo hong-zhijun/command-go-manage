@@ -169,7 +169,8 @@ export async function syncCcKey(ccKeyRow) {
       weeklyExceeded: wk.exceeded,
       weeklyReset: wk.resetAt,
       lastError: '',
-      status: fh.exceeded || wk.exceeded ? 'exhausted' : 'active',
+      status: fh.exceeded || wk.exceeded || (report.monthlyLeft != null && report.monthlyLeft <= 0)
+        ? 'exhausted' : 'active',
       detail: JSON.stringify({
         usage: report.usage || null,
         exceeded: report.exceeded || null,

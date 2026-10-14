@@ -361,6 +361,10 @@ export default async function proxyRoutes(fastify) {
           : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
           : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
 
+        if (streamStatus === 'error' && isCreditExhausted(400, translator?.upstreamError?.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+        }
+
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
           Date.now() - startTime, streamStatus, errMsg);
@@ -701,6 +705,10 @@ export default async function proxyRoutes(fastify) {
           : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
           : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
 
+        if (streamStatus === 'error' && isCreditExhausted(400, translator?.upstreamError?.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+        }
+
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
           Date.now() - startTime, streamStatus, errMsg);
@@ -1033,6 +1041,10 @@ export default async function proxyRoutes(fastify) {
           : streamStatus === 'timeout' ? `idle_timeout [${ctx}]`
           : streamStatus === 'abort' ? `client_disconnect [${ctx}]`
           : `${translator?.upstreamError?.body?.error?.message || 'upstream_error'} [${ctx}]`;
+
+        if (streamStatus === 'error' && isCreditExhausted(400, translator?.upstreamError?.body?.error?.message)) {
+          markKeyExhausted(ccKeyRow, user.apiKeyId);
+        }
 
         logUsage(user, ccKeyRow, model,
           translator?.inputTokens ?? 0, translator?.outputTokens ?? 0, translator?.cachedInputTokens ?? 0,
