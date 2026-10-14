@@ -37,6 +37,7 @@ export function getDb() {
     ['priority',          'INTEGER NOT NULL DEFAULT 10'],
     ['max_concurrent',    'INTEGER NOT NULL DEFAULT 0'],
     ['timezone_override', "TEXT NOT NULL DEFAULT ''"],
+    ['is_disabled',       'INTEGER NOT NULL DEFAULT 0'],
   ];
   for (const [col, def] of migrations) {
     if (!ccCols.includes(col)) {
@@ -163,8 +164,12 @@ export function listCcKeys() {
 
 export function listActiveCcKeys() {
   return getDb().prepare(
-    "SELECT * FROM cc_keys WHERE status = 'active' ORDER BY id ASC"
+    "SELECT * FROM cc_keys WHERE status = 'active' AND is_disabled = 0 ORDER BY id ASC"
   ).all();
+}
+
+export function updateCcKeyDisabled(id, isDisabled) {
+  getDb().prepare('UPDATE cc_keys SET is_disabled = ? WHERE id = ?').run(isDisabled ? 1 : 0, id);
 }
 
 export function findCcKeyById(id) {

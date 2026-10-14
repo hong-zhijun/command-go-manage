@@ -3,7 +3,7 @@
  */
 import {
   listCcKeys, findCcKeyByRawKey, insertCcKey, deleteCcKey, updateCcKeyLabel,
-  updateCcKeyDispatch, findCcKeyById,
+  updateCcKeyDispatch, updateCcKeyDisabled, findCcKeyById,
   getSystemUsageStats, findAllApiKeys,
   getHourlyStats, getDailyStats, getModelDistribution,
   queryUsageLogs, getDistinctModels, startOfDayUTC8,
@@ -58,6 +58,7 @@ function toCcKeyView(row) {
     timezoneOverride: row.timezone_override || '',
     // 设备指纹摘要
     device: deviceSummary,
+    isDisabled: !!row.is_disabled,
     currentInflight: row.current_inflight,
     lastChecked: row.last_checked,
     lastError: row.last_error,
@@ -161,6 +162,16 @@ export default async function adminRoutes(fastify) {
     if (!row) return reply.code(404).send({ error: 'Key not found' });
     deleteCcKey(id);
     return { ok: true };
+  });
+
+  // PATCH /api/admin/cc-keys/:id/toggle — 启用/停用
+  fastify.patch('/api/admin/cc-keys/:id/toggle', async (request, reply) => {
+    const id = Number(request.params.id);
+    const row = findCcKeyById(id);
+    if (!row) return reply.code(404).send({ error: 'Key not found' });
+    updateCcKeyDisabled(id, !row.is_disabled);
+    const fresh = findCcKeyById(id);
+    return { key: toCcKeyView(fresh) };
   });
 
   // POST /api/admin/cc-keys/refresh — 刷新一个或全部

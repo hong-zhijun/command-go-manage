@@ -165,6 +165,8 @@
   .badge.active { background: var(--green-light); color: var(--green); }
   .badge.error { background: var(--red-light); color: var(--red); }
   .badge.exhausted { background: var(--yellow-light); color: #b45309; }
+  .badge.disabled { background: #f3f4f6; color: #9ca3af; }
+  tr.row-disabled { opacity: 0.55; }
 
   /* ── CC Key 额度单元格 ── */
   .quota-cell { min-width: 110px; }
@@ -215,6 +217,10 @@
   .btn-sm.danger:hover { background: var(--red); color: #fff; }
   .btn-sm.primary { color: var(--accent); border-color: var(--accent); }
   .btn-sm.primary:hover { background: var(--accent); color: #fff; }
+  .btn-sm.warning { color: #b45309; border-color: #f59e0b; }
+  .btn-sm.warning:hover { background: #f59e0b; color: #fff; }
+  .btn-sm.success { color: var(--green); border-color: var(--green); }
+  .btn-sm.success:hover { background: var(--green); color: #fff; }
 
   /* ── 空状态 ── */
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); font-size: 14px; }
@@ -813,9 +819,10 @@ async function loadCcKeys() {
 }
 
 function renderCcKeyRow(k) {
-  const statusText = k.status === 'active' ? '正常' : k.status === 'error' ? '异常' : k.status === 'exhausted' ? '超限' : k.status;
-  return `<tr data-ccid="${k.id}">
-    <td><span class="badge ${k.status}">${statusText}</span></td>
+  const statusText = k.isDisabled ? '停用' : k.status === 'active' ? '正常' : k.status === 'error' ? '异常' : k.status === 'exhausted' ? '超限' : k.status;
+  const statusCls = k.isDisabled ? 'disabled' : k.status;
+  return `<tr data-ccid="${k.id}" ${k.isDisabled ? 'class="row-disabled"' : ''}>
+    <td><span class="badge ${statusCls}">${statusText}</span></td>
     <td><div class="label-edit"><span>${esc(k.label || '-')}</span><button class="btn-edit-label" onclick="editCcLabel(${k.id}, this)" title="编辑备注">✎</button></div></td>
     <td class="quota-cell">${renderQuotaCell(k.credits?.fiveHour)}</td>
     <td class="quota-cell">${renderQuotaCell(k.credits?.weekly)}</td>
@@ -825,6 +832,7 @@ function renderCcKeyRow(k) {
     <td style="white-space:nowrap">
       <button class="btn-sm primary" onclick="openCcModal(${k.id})">详情</button>
       <button class="btn-sm" onclick="refreshCcKey(${k.id})">刷新</button>
+      <button class="btn-sm ${k.isDisabled ? 'success' : 'warning'}" onclick="toggleCcKey(${k.id})">${k.isDisabled ? '启用' : '停用'}</button>
       <button class="btn-sm danger" onclick="deleteCcKey(${k.id})">删除</button>
     </td>
   </tr>`;
@@ -1028,6 +1036,14 @@ async function refreshAllCcKeys() {
   toast('全部刷新完成');
   await loadCcKeys();
   if (btn) { btn.classList.remove('spinning'); btn.disabled = false; btn.textContent = '↻ 全部刷新'; }
+}
+
+async function toggleCcKey(id) {
+  try {
+    const data = await api('/api/admin/cc-keys/' + id + '/toggle', { method: 'PATCH' });
+    toast(data.key.isDisabled ? '已停用' : '已启用');
+    await loadCcKeys();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteCcKey(id) {
