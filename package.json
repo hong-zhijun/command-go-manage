@@ -6,6 +6,7 @@
   "license": "MIT",
   "main": "src/server.js",
   "scripts": {
+    "test": "node --test",
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "docker:build": "docker build -t command-go-manage:latest .",

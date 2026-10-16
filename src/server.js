@@ -22,6 +22,7 @@ import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import proxyRoutes from './routes/proxy.js';
 import dashboardRoutes from './routes/dashboard.js';
+import ccAuthRoutes from './routes/cc-auth.js';
 import { startQuotaSync, stopQuotaSync } from './pool/quota-sync.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -86,6 +87,7 @@ async function main() {
   // ── 路由 ──────────────────────────────────────
 
   await app.register(authRoutes);
+  await app.register(ccAuthRoutes);
   await app.register(adminRoutes);
   await app.register(proxyRoutes);
   await app.register(dashboardRoutes);

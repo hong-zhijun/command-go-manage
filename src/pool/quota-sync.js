@@ -40,6 +40,7 @@ function toEpochMs(v) {
 
 async function getJson(path, key) {
   const resp = await fetch(config.ccApiBase + path, {
+    signal: AbortSignal.timeout(15_000),
     headers: {
       'Authorization': 'Bearer ' + key,
       'Accept': 'application/json',
@@ -70,16 +71,20 @@ function normalizeWindow(raw) {
 /**
  * 拉取单个 CC Key 的额度报告
  */
-export async function fetchKeyReport(apiKey) {
+export async function fetchKeyReport(apiKey, { requireIdentity = false } = {}) {
   const report = {};
 
   // 1. whoami
   try {
     const who = await getJson('/alpha/whoami', apiKey);
     const user = isRecord(who.user) ? who.user : (isRecord(who.data?.user) ? who.data.user : undefined);
+    if (requireIdentity && (!user || typeof user.id !== 'string' || !user.id)) {
+      throw new Error('Upstream did not return a valid user identity');
+    }
     if (user) report.userName = str(user.userName) ?? str(user.username) ?? str(user.name) ?? '';
     report.orgId = isRecord(who.org) ? str(who.org.id) : undefined;
   } catch (e) {
+    if (requireIdentity) throw new Error('无法验证账号身份，请稍后重新授权');
     if (e.status === 401 || e.status === 403) {
       throw new Error(`Key rejected (HTTP ${e.status})`);
     }
@@ -147,9 +152,9 @@ export async function fetchKeyReport(apiKey) {
 /**
  * 同步单个 CC Key 的额度到数据库
  */
-export async function syncCcKey(ccKeyRow) {
+export async function syncCcKey(ccKeyRow, initialReport) {
   try {
-    const report = await fetchKeyReport(ccKeyRow.api_key);
+    const report = initialReport || await fetchKeyReport(ccKeyRow.api_key);
     const fh = report.fiveHour || {};
     const wk = report.weekly || {};
 

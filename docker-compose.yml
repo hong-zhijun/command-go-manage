@@ -18,6 +18,8 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       # CC 代理配置
       - CC_API_BASE=${CC_API_BASE:-https://api.commandcode.ai}
+      - CC_STUDIO_BASE=${CC_STUDIO_BASE:-https://commandcode.ai}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - CC_STREAM_IDLE_MS=${CC_STREAM_IDLE_MS:-30000}
       - CC_NONSTREAM_IDLE_MS=${CC_NONSTREAM_IDLE_MS:-90000}
       - CC_MAX_BODY_MB=${CC_MAX_BODY_MB:-100}

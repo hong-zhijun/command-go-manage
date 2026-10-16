@@ -91,7 +91,8 @@ export default async function adminRoutes(fastify) {
   // POST /api/admin/cc-keys — 添加 CC Key（先验证再入库）
   fastify.post('/api/admin/cc-keys', async (request, reply) => {
     const { key, label } = request.body || {};
-    if (!key) return reply.code(400).send({ error: 'Missing key' });
+    if (typeof key !== 'string' || !key.trim()) return reply.code(400).send({ error: 'Missing key' });
+    if (label !== undefined && typeof label !== 'string') return reply.code(400).send({ error: 'Invalid label' });
 
     const trimmed = key.trim();
     if (!/^[\x21-\x7e]+$/.test(trimmed)) {
@@ -105,12 +106,12 @@ export default async function adminRoutes(fastify) {
 
     // 先验证 key 是否有效
     try {
-      const report = await fetchKeyReport(trimmed);
+      const report = await fetchKeyReport(trimmed, { requireIdentity: true });
       insertCcKey(trimmed, label || report.userName || maskCcKey(trimmed));
 
       // 拉取到的数据立即写入
       const row = findCcKeyByRawKey(trimmed);
-      if (row) await syncCcKey(row);
+      if (row) await syncCcKey(row, report);
 
       const fresh = findCcKeyByRawKey(trimmed);
       return reply.code(201).send({ key: toCcKeyView(fresh) });
