@@ -18,7 +18,7 @@ function purgeExpired() {
   }
 }
 
-export function createCcAuthSession({ userId, callbackUrl, authorizationUrl }) {
+export function createCcAuthSession({ userId, callbackUrl }) {
   purgeExpired();
   for (const [id, session] of sessions) {
     if (session.userId === userId && session.status !== 'processing') sessions.delete(id);
@@ -30,9 +30,8 @@ export function createCcAuthSession({ userId, callbackUrl, authorizationUrl }) {
     state,
     userId,
     callbackUrl,
-    authorizationUrl,
     status: 'pending',
-    message: '等待浏览器授权',
+    message: '等待粘贴浏览器授权回调内容',
     createdAt: Date.now(),
     expiresAt: Date.now() + SESSION_TTL_MS,
   };
@@ -51,14 +50,6 @@ export function updateCcAuthSession(id, patch) {
   if (!session) return null;
   Object.assign(session, patch);
   return { ...session };
-}
-
-export function findCcAuthSessionByState(state) {
-  purgeExpired();
-  for (const session of sessions.values()) {
-    if (session.state === state) return session;
-  }
-  return null;
 }
 
 // 防止关闭浏览器后留下的过期会话长期占用内存。

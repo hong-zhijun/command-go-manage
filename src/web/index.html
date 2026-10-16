@@ -449,12 +449,23 @@
           </div>
         </div>
         <div id="add-cc-auth-panel" style="display:none">
-          <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:14px">点击生成授权链接，在浏览器中完成 Command Code 授权。授权成功后账号会自动加入 CC 账号池。</p>
+          <p style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:14px">生成链接并在浏览器授权，然后粘贴回调请求，验证后保存账号。无需安装或启动 cmdc。</p>
           <div class="form-group"><label>备注</label><input id="cc-auth-label" placeholder="可选，默认使用账号名称" maxlength="60"></div>
           <button class="btn-action" id="start-cc-auth-btn" onclick="startCcAuth()" style="width:100%">生成授权链接</button>
           <div id="cc-auth-status" style="display:none;margin-top:14px;font-size:13px;line-height:1.6"></div>
           <div id="cc-auth-link-wrap" style="display:none;margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;word-break:break-all">
             <a id="cc-auth-link" href="#" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent)">打开授权页面</a>
+          </div>
+          <div id="cc-auth-import-wrap" style="display:none;margin-top:14px">
+            <ol style="padding-left:20px;font-size:12px;color:var(--text-dim);line-height:1.8;margin-bottom:12px">
+              <li>打开授权页面，按 F12 → Network，勾选 Preserve log（保留日志）。</li>
+              <li>完成官网授权，找到发往 localhost 的 callback 请求。显示连接失败也可以复制。</li>
+              <li>右键请求 → Copy → Copy as cURL，粘贴到下面。</li>
+            </ol>
+            <label for="cc-auth-content" style="display:block;font-size:13px;margin-bottom:6px">授权回调内容</label>
+            <textarea id="cc-auth-content" rows="6" maxlength="64000" spellcheck="false" autocomplete="off" placeholder="粘贴 cURL、JSON、表单请求体，或包含 apiKey 的 localhost URL" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-family:monospace;font-size:12px;resize:vertical"></textarea>
+            <p style="font-size:12px;color:var(--text-dim);line-height:1.6;margin:8px 0">只有 state 的地址不含 Key，请复制 POST 请求内容。</p>
+            <button class="btn-action" id="import-cc-auth-btn" onclick="importCcAuth()" style="width:100%">解析并保存账号</button>
           </div>
           <div style="margin-top:16px;text-align:right">
             <button class="btn-secondary" onclick="closeAddCcModal()">关闭</button>
@@ -823,7 +834,6 @@ async function deleteKey(id) {
 
 let ccKeysData = [];
 let ccAuthSessionId = null;
-let ccAuthPollTimer = null;
 let ccAuthGeneration = 0;
 
 async function loadCcKeys() {
@@ -1023,7 +1033,6 @@ function switchAddCcMode(mode) {
 
 function resetCcAuthState() {
   ccAuthGeneration++;
-  if (ccAuthPollTimer) { clearTimeout(ccAuthPollTimer); ccAuthPollTimer = null; }
   if (ccAuthSessionId && token) {
     api('/api/admin/cc-keys/auth/session/' + encodeURIComponent(ccAuthSessionId), { method: 'DELETE' }).catch(() => {});
   }
@@ -1033,6 +1042,9 @@ function resetCcAuthState() {
   status.textContent = '';
   document.getElementById('cc-auth-link-wrap').style.display = 'none';
   document.getElementById('cc-auth-link').removeAttribute('href');
+  document.getElementById('cc-auth-import-wrap').style.display = 'none';
+  document.getElementById('cc-auth-content').value = '';
+  setBtnLoading(document.getElementById('import-cc-auth-btn'), false, '解析并保存账号');
 }
 
 function setCcAuthStatus(message, color = 'var(--text-dim)') {
@@ -1044,8 +1056,6 @@ function setCcAuthStatus(message, color = 'var(--text-dim)') {
 
 async function startCcAuth() {
   const btn = document.getElementById('start-cc-auth-btn');
-  const popup = window.open('about:blank', '_blank');
-  if (popup) popup.opener = null;
   setBtnLoading(btn, true);
   resetCcAuthState();
   const generation = ccAuthGeneration;
@@ -1053,7 +1063,6 @@ async function startCcAuth() {
     const label = document.getElementById('cc-auth-label').value.trim();
     const data = await api('/api/admin/cc-keys/auth/start', { method: 'POST', body: JSON.stringify({ label }) });
     if (generation !== ccAuthGeneration) {
-      if (popup) popup.close();
       api('/api/admin/cc-keys/auth/session/' + encodeURIComponent(data.sessionId), { method: 'DELETE' }).catch(() => {});
       return;
     }
@@ -1061,38 +1070,37 @@ async function startCcAuth() {
     const link = document.getElementById('cc-auth-link');
     link.href = data.authorizationUrl;
     document.getElementById('cc-auth-link-wrap').style.display = 'block';
-    if (popup) popup.location.href = data.authorizationUrl;
-    setCcAuthStatus('等待浏览器完成授权…', 'var(--accent)');
-    await pollCcAuthStatus(data.sessionId);
+    document.getElementById('cc-auth-import-wrap').style.display = 'block';
+    setCcAuthStatus('链接已生成，10 分钟内有效。请打开授权页面，授权后粘贴回调请求。', 'var(--accent)');
   } catch (e) {
-    if (popup) popup.close();
     if (generation === ccAuthGeneration) setCcAuthStatus(e.message, 'var(--red)');
   } finally {
     setBtnLoading(btn, false, '生成授权链接');
   }
 }
 
-async function pollCcAuthStatus(sessionId) {
-  if (!sessionId || sessionId !== ccAuthSessionId) return;
+async function importCcAuth() {
+  const sessionId = ccAuthSessionId;
+  if (!sessionId) { toast('请先生成授权链接', 'error'); return; }
+  const content = document.getElementById('cc-auth-content').value.trim();
+  if (!content) { toast('请粘贴授权回调内容', 'error'); return; }
+  const btn = document.getElementById('import-cc-auth-btn');
+  setBtnLoading(btn, true);
+  const generation = ccAuthGeneration;
+  setCcAuthStatus('正在解析并验证账号…', 'var(--accent)');
   try {
-    const data = await api('/api/admin/cc-keys/auth/status/' + encodeURIComponent(sessionId));
-    if (sessionId !== ccAuthSessionId) return;
-    if (data.status === 'success') {
-      ccAuthSessionId = null;
-      setCcAuthStatus(data.message || '授权成功，账号已加入账号池。', 'var(--green)');
-      toast(data.message || 'CC 账号添加成功');
-      const generation = ccAuthGeneration;
-      await loadCcKeys();
-      setTimeout(() => { if (generation === ccAuthGeneration) closeAddCcModal(); }, 700);
-    } else if (data.status === 'error' || data.status === 'denied') {
-      setCcAuthStatus(data.message || '授权失败', 'var(--red)');
-    } else {
-      setCcAuthStatus(data.message || '等待浏览器完成授权…', 'var(--accent)');
-      ccAuthPollTimer = setTimeout(() => pollCcAuthStatus(sessionId), 2000);
-    }
+    const data = await api('/api/admin/cc-keys/auth/import', { method: 'POST', body: JSON.stringify({ sessionId, content }) });
+    if (generation !== ccAuthGeneration) return;
+    ccAuthSessionId = null;
+    document.getElementById('cc-auth-content').value = '';
+    setCcAuthStatus(data.message, 'var(--green)');
+    toast(data.message);
+    await loadCcKeys();
+    setTimeout(() => { if (generation === ccAuthGeneration) closeAddCcModal(); }, 700);
   } catch (e) {
-    if (sessionId !== ccAuthSessionId) return;
-    setCcAuthStatus(e.message, 'var(--red)');
+    if (generation === ccAuthGeneration) setCcAuthStatus(e.message, 'var(--red)');
+  } finally {
+    if (generation === ccAuthGeneration) setBtnLoading(btn, false, '解析并保存账号');
   }
 }
 

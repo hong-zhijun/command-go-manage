@@ -11,10 +11,10 @@ import Fastify from 'fastify';
 import jwt from '@fastify/jwt';
 import formbody from '@fastify/formbody';
 
-test('server authorization callbacks validate and save accounts once', async t => {
+test('localhost authorization imports validate and save accounts once', async t => {
   const directory = mkdtempSync(join(tmpdir(), 'command-go-auth-'));
   process.env.DB_PATH = join(directory, 'test.db');
-  process.env.PUBLIC_BASE_URL = 'https://panel.example.test';
+  delete process.env.PUBLIC_BASE_URL;
   process.env.ADMIN_PASSWORD = 'test-password';
   const upstream = Fastify({ logger: false });
   let identityMode = 'valid';
@@ -55,12 +55,15 @@ test('server authorization callbacks validate and save accounts once', async t =
     const result = response.json();
     const link = new URL(result.authorizationUrl);
     assert.equal(link.origin, 'https://commandcode.ai');
-    assert.equal(link.searchParams.get('callback'), 'https://panel.example.test/api/admin/cc-keys/auth/callback');
+    assert.equal(link.searchParams.get('callback'), 'http://localhost:5959/callback');
     return { ...result, state: link.searchParams.get('state') };
   };
-  const callback = (state, extra = {}, contentType = 'application/json') => {
-    const payload = { state, apiKey: 'user_test-key', userId: 'user-id', userName: 'untrusted-label', keyName: 'cli-test', ...extra };
-    return app.inject({ method: 'POST', url: '/api/admin/cc-keys/auth/callback', headers: { 'content-type': contentType }, payload: contentType === 'application/json' ? payload : new URLSearchParams(payload).toString() });
+  const callback = (session, extra = {}, format = 'json', authHeaders = headers) => {
+    const payload = { state: session.state, apiKey: 'user_test-key', userId: 'user-id', userName: 'untrusted-label', keyName: 'cli-test', ...extra };
+    let content = JSON.stringify(payload);
+    if (format === 'form') content = new URLSearchParams(payload).toString();
+    if (format === 'curl') content = `curl 'http://localhost:5959/callback' --data-raw '${new URLSearchParams(payload)}'`;
+    return app.inject({ method: 'POST', url: '/api/admin/cc-keys/auth/import', headers: authHeaders, payload: { sessionId: session.sessionId, content } });
   };
   const status = session => app.inject({ url: `/api/admin/cc-keys/auth/status/${session.sessionId}`, headers });
 
@@ -68,34 +71,41 @@ test('server authorization callbacks validate and save accounts once', async t =
   assert.equal((await app.inject({ method: 'POST', url: '/api/admin/cc-keys/auth/start', headers: { authorization: `Bearer ${app.jwt.sign({ id: 1, role: 'user' })}` } })).statusCode, 403);
   const first = await start();
   assert.equal((await app.inject({ url: `/api/admin/cc-keys/auth/status/${first.sessionId}`, headers: otherAdmin })).statusCode, 404);
-  assert.equal((await callback('wrong-state')).statusCode, 403);
+  assert.equal((await callback(first, {}, 'json', {})).statusCode, 401);
+  assert.equal((await callback(first, {}, 'json', otherAdmin)).statusCode, 404);
+  assert.equal((await callback(first, { state: 'wrong-state' })).statusCode, 403);
+  const stateOnly = await app.inject({ method: 'POST', url: '/api/admin/cc-keys/auth/import', headers, payload: { sessionId: first.sessionId, content: `http://localhost:5959/callback/complete?state=${first.state}` } });
+  assert.equal(stateOnly.statusCode, 400);
+  assert.match(stateOnly.json().error, /没有 apiKey/);
+  const wrongUrl = await app.inject({ method: 'POST', url: '/api/admin/cc-keys/auth/import', headers, payload: { sessionId: first.sessionId, content: `curl 'https://other.example/callback' --data-raw 'apiKey=user_test-key&state=${first.state}'` } });
+  assert.equal(wrongUrl.statusCode, 400);
   assert.equal((await status(first)).json().status, 'pending');
   const second = await start();
-  assert.equal((await callback(first.state)).statusCode, 403);
+  assert.equal((await callback(first)).statusCode, 404);
   updateCcAuthSession(second.sessionId, { expiresAt: Date.now() - 1 });
-  assert.equal((await callback(second.state)).statusCode, 403);
+  assert.equal((await callback(second)).statusCode, 404);
 
   const denied = await start();
-  await callback(denied.state, { error: 'access_denied' });
+  await callback(denied, { error: 'access_denied' });
   assert.equal((await status(denied)).json().status, 'denied');
-  assert.equal((await callback(denied.state)).statusCode, 403);
+  assert.equal((await callback(denied)).statusCode, 409);
 
   const malformed = await start();
-  assert.equal((await callback(malformed.state, { userId: {} })).statusCode, 400);
+  assert.equal((await callback(malformed, { userId: {} })).statusCode, 400);
   const oversized = await start();
-  assert.equal((await callback(oversized.state, { keyName: 'a'.repeat(11000) })).statusCode, 413);
+  assert.equal((await callback(oversized, { keyName: 'a'.repeat(130000) })).statusCode, 413);
 
   for (const mode of ['offline', 'malformed', 'rejected']) {
     identityMode = mode;
     const session = await start();
     const key = mode === 'rejected' ? 'user_invalid-key' : 'user_test-key';
-    assert.equal((await callback(session.state, { apiKey: key })).statusCode, 400);
-    assert.equal((await status(session)).json().status, 'error');
+    assert.equal((await callback(session, { apiKey: key })).statusCode, 400);
+    assert.equal((await status(session)).json().status, 'pending');
     assert.equal(db.listCcKeys().length, 0);
   }
   identityMode = 'valid';
   const success = await start();
-  const response = await callback(success.state, {}, 'application/x-www-form-urlencoded');
+  const response = await callback(success, {}, 'curl');
   assert.equal(response.statusCode, 200);
   assert.equal(response.headers['cache-control'], 'no-store');
   assert.ok(!response.body.includes('user_test-key'));
@@ -107,13 +117,13 @@ test('server authorization callbacks validate and save accounts once', async t =
   const result = await status(success);
   assert.equal(result.json().status, 'success');
   assert.ok(!result.body.includes('user_test-key'));
-  assert.equal((await callback(success.state)).statusCode, 403);
+  assert.equal((await callback(success)).statusCode, 409);
   const duplicate = await start();
-  assert.equal((await callback(duplicate.state)).statusCode, 200);
+  assert.equal((await callback(duplicate, {}, 'form')).statusCode, 200);
   assert.equal(db.listCcKeys().length, 1);
   const cancelled = await start();
   assert.equal((await app.inject({ method: 'DELETE', url: `/api/admin/cc-keys/auth/session/${cancelled.sessionId}`, headers })).statusCode, 200);
-  assert.equal((await callback(cancelled.state)).statusCode, 403);
+  assert.equal((await callback(cancelled)).statusCode, 404);
 });
 
 test('dashboard inline JavaScript parses', () => {
@@ -132,7 +142,7 @@ test('complete server starts and exposes the authorization UI and routes', async
   const child = spawn(process.execPath, ['src/server.js'], {
     cwd: new URL('..', import.meta.url),
     windowsHide: true,
-    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DB_PATH: join(directory, 'test.db'), JWT_SECRET: 'smoke-secret', ADMIN_USERNAME: 'smoke-admin', ADMIN_PASSWORD: 'smoke-password', PUBLIC_BASE_URL: 'https://panel.example.test' },
+    env: { ...process.env, PORT: String(port), HOST: '127.0.0.1', DB_PATH: join(directory, 'test.db'), JWT_SECRET: 'smoke-secret', ADMIN_USERNAME: 'smoke-admin', ADMIN_PASSWORD: 'smoke-password', PUBLIC_BASE_URL: '' },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let logs = '';

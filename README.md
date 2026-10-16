@@ -56,15 +56,16 @@ curl http://localhost:3050/v1/chat/completions \
 
 ### 浏览器授权添加账号
 
-在部署环境设置 `PUBLIC_BASE_URL=https://你的面板域名`，重新构建并启动服务。
-Docker Compose 已透传该环境变量；本地运行请在进程环境中设置。
-域名的反向代理应将 `/api/admin/cc-keys/auth/callback` 的 POST 请求转发到本服务，且不要额外加登录拦截。
+官网只允许 localhost 回调，授权链接使用 `http://localhost:5959/callback`。无需配置 `PUBLIC_BASE_URL` 或启动本地 cmdc / callback 服务。
 
-在“添加 CC 账号”中选择“浏览器授权”，点击“生成授权链接”，在新标签页登录 Command Code 并授权。账号验证完成后自动入池，面板自动刷新。浏览器阻止弹窗时，可点击弹窗内的“打开授权页面”。不需要安装或登录本地 cmdc。
+1. “添加 CC 账号” → “浏览器授权” → “生成授权链接” → “打开授权页面”。
+2. 在授权页面按 F12 打开 **Network**，勾选 **Preserve log（保留日志）**，再完成官网授权。
+3. 找到发往 `localhost:5959/callback` 的 POST 请求，右键 **Copy → Copy as cURL**。本机没有监听服务时请求连接失败属于预期，复制其请求内容即可。
+4. 返回面板，在“授权回调内容”中粘贴，点击“解析并保存账号”。服务器验证 Key 后加入账号池，面板刷新。
 
-授权会话有效期为 10 分钟，绑定发起授权的管理员，仅允许使用一次；重新生成链接使该管理员之前的待授权链接失效。关闭添加弹窗取消等待中的授权。会话保存在服务内存中，重启后需重新生成链接，部署多个实例时须让授权和轮询请求到达同一实例。
+支持浏览器复制的 cURL（bash / cmd）、JSON 和 URL 编码表单请求体，也支持确实带有 `apiKey` 的 localhost URL。只有 `state` 的地址不包含 Key，无法用于导入。粘贴的 cURL 只解析文本，不执行命令或访问其中的 URL，凭据通过已登录管理员的 POST 请求提交，不返回原始 Key。
 
-该实现依据 CLI 1.56.0 的 POST 回调格式。Command Code 官网是否允许公网 callback，仍需在实际域名完成一次授权验证；若官网拒绝回调地址，界面手动输入 Key 的方式仍可使用。
+授权会话有效期为 10 分钟，绑定发起授权的管理员，仅允许成功处理一次；重新生成链接使该管理员之前的待授权链接失效。关闭添加弹窗取消等待中的授权。会话保存在服务内存中，重启后需重新生成链接，多个实例须让创建和导入请求到达同一实例。
 
 | 端点 | 说明 |
 |------|------|
@@ -81,7 +82,7 @@ Docker Compose 已透传该环境变量；本地运行请在进程环境中设�
 | `POST /api/admin/cc-keys/auth/start` | 创建浏览器授权会话 |
 | `GET /api/admin/cc-keys/auth/status/:sessionId` | 查询本人授权状态 |
 | `DELETE /api/admin/cc-keys/auth/session/:sessionId` | 取消本人待授权会话 |
-| `POST /api/admin/cc-keys/auth/callback` | 接收授权结果，验证并入池 |
+| `POST /api/admin/cc-keys/auth/import` | 解析管理员粘贴的回调内容，验证并入池 |
 | `POST /api/admin/cc-keys/refresh` | 刷新额度 |
 | `GET /api/admin/users` | 用户列表 |
 | `GET /api/dashboard` | 用户面板数据 |

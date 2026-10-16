@@ -25,7 +25,6 @@ const config = {
   // CC 上游
   ccApiBase: process.env.CC_API_BASE || 'https://api.commandcode.ai',
   ccStudioBase: process.env.CC_STUDIO_BASE || 'https://commandcode.ai',
-  publicBaseUrl: process.env.PUBLIC_BASE_URL || '',
   ccProjectSlug: process.env.CC_PROJECT_SLUG || 'cc-proxy',
 
   // CC 代理行为
