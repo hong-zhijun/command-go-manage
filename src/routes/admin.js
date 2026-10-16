@@ -7,10 +7,14 @@ import {
   getSystemUsageStats, findAllApiKeys,
   getHourlyStats, getDailyStats, getModelDistribution,
   queryUsageLogs, getDistinctModels, startOfDayUTC8,
+  listModels, setModelsEnabled, deleteModel,
 } from '../db/index.js';
 import { syncCcKey, syncAllCcKeys, fetchKeyReport } from '../pool/quota-sync.js';
 import { getDeviceSummary, TIMEZONE_OPTIONS } from '../proxy/fingerprint.js';
 import { invalidateKeyState } from '../proxy/core.js';
+import {
+  syncAllModels, isModelFilterEnabled, setModelFilterEnabled, getLastModelSync,
+} from '../pool/model-sync.js';
 
 // 掩码 CC Key（只显示前 8 位 + 后 4 位）
 function maskCcKey(key) {
@@ -63,6 +67,24 @@ function toCcKeyView(row) {
     lastChecked: row.last_checked,
     lastError: row.last_error,
     detail,
+  };
+}
+
+// 模型目录 → 前端 JSON
+function modelsView() {
+  const keyLabels = new Map(listCcKeys().map(k => [k.id, k.label || maskCcKey(k.api_key)]));
+  return {
+    filterEnabled: isModelFilterEnabled(),
+    lastSync: getLastModelSync(),
+    models: listModels().map(m => ({
+      id: m.id,
+      ownedBy: m.owned_by,
+      enabled: !!m.enabled,
+      available: !!m.available,
+      keys: m.cc_key_ids.filter(id => keyLabels.has(id)).map(id => ({ id, label: keyLabels.get(id) })),
+      firstSeen: m.first_seen,
+      lastSeen: m.last_seen,
+    })),
   };
 }
 
@@ -188,6 +210,45 @@ export default async function adminRoutes(fastify) {
     const result = await syncAllCcKeys();
     const keys = listCcKeys();
     return { keys: keys.map(toCcKeyView), result };
+  });
+
+  // ── 模型管理 ──────────────────────────────────
+
+  // GET /api/admin/models — 模型目录 + 白名单开关
+  fastify.get('/api/admin/models', async () => modelsView());
+
+  // POST /api/admin/models/sync — 立即从所有 Key 拉取模型
+  fastify.post('/api/admin/models/sync', async () => {
+    const result = await syncAllModels();
+    return { ...modelsView(), result };
+  });
+
+  // PATCH /api/admin/models/settings — { filterEnabled }
+  fastify.patch('/api/admin/models/settings', async (request, reply) => {
+    const { filterEnabled } = request.body || {};
+    if (typeof filterEnabled !== 'boolean') return reply.code(400).send({ error: 'filterEnabled must be boolean' });
+    setModelFilterEnabled(filterEnabled);
+    return modelsView();
+  });
+
+  // POST /api/admin/models/enabled — { ids: [...], enabled }（模型 ID 含 /，放在 body 里）
+  fastify.post('/api/admin/models/enabled', async (request, reply) => {
+    const { ids, enabled } = request.body || {};
+    if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string') || typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'ids must be string[] and enabled boolean' });
+    }
+    setModelsEnabled(ids, enabled);
+    return modelsView();
+  });
+
+  // POST /api/admin/models/delete — { id }，仅允许删除已下线的模型
+  fastify.post('/api/admin/models/delete', async (request, reply) => {
+    const { id } = request.body || {};
+    const model = listModels().find(m => m.id === id);
+    if (!model) return reply.code(404).send({ error: 'Model not found' });
+    if (model.available) return reply.code(400).send({ error: 'Model is still provided by a key' });
+    deleteModel(id);
+    return modelsView();
   });
 
   // ── 系统统计 ──────────────────────────────────

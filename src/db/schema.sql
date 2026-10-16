@@ -85,6 +85,23 @@ CREATE INDEX IF NOT EXISTS idx_usage_logs_user   ON usage_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_time   ON usage_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_logs_cc_key ON usage_logs(cc_key_id);
 
+-- 模型目录（从 CC Key 池同步，管理员控制对外开放哪些）
+CREATE TABLE IF NOT EXISTS models (
+  id          TEXT    PRIMARY KEY,                 -- 上游模型 ID，如 deepseek/deepseek-v4-flash
+  owned_by    TEXT    NOT NULL DEFAULT '',
+  enabled     INTEGER NOT NULL DEFAULT 0,          -- 是否对调用者开放（开启模型白名单时生效）
+  available   INTEGER NOT NULL DEFAULT 1,          -- 最近一次同步是否仍有 Key 提供
+  cc_key_ids  TEXT    NOT NULL DEFAULT '[]',       -- 提供该模型的 CC Key ID 列表（JSON）
+  first_seen  INTEGER NOT NULL,
+  last_seen   INTEGER NOT NULL
+);
+
+-- 系统设置（key/value）
+CREATE TABLE IF NOT EXISTS settings (
+  key         TEXT    PRIMARY KEY,
+  value       TEXT    NOT NULL
+);
+
 -- ── 迁移：给已有 cc_keys 表补新字段 ──
 -- SQLite 的 ALTER TABLE ADD COLUMN 碰到已存在的列会报错，用 pragma 检查绕过
 -- 这里简单用一段安全的方式：如果列不存在就加

@@ -84,8 +84,22 @@ curl http://localhost:3050/v1/chat/completions \
 | `DELETE /api/admin/cc-keys/auth/session/:sessionId` | 取消本人待授权会话 |
 | `POST /api/admin/cc-keys/auth/import` | 解析管理员粘贴的回调内容，验证并入池 |
 | `POST /api/admin/cc-keys/refresh` | 刷新额度 |
+| `GET /api/admin/models` | 模型目录与白名单开关 |
+| `POST /api/admin/models/sync` | 立即从所有 Key 同步模型 |
+| `PATCH /api/admin/models/settings` | 开关模型白名单 `{ filterEnabled }` |
+| `POST /api/admin/models/enabled` | 批量开放/关闭模型 `{ ids, enabled }` |
+| `POST /api/admin/models/delete` | 移除已下线的模型 `{ id }` |
 | `GET /api/admin/users` | 用户列表 |
 | `GET /api/dashboard` | 用户面板数据 |
+
+### 模型管理
+
+模型目录只在管理员手动同步时更新：在面板 **模型管理** 页点 **从账号同步**，服务用池中每个启用的 Key 调上游 `/provider/v1/models` 并合并结果。添加或停用 Key 后需要再同步一次。同一页可以搜索和勾选模型。
+
+- **白名单关闭**（默认）：`/v1/models` 返回全部可用模型，请求不限制模型。
+- **白名单开启**：`/v1/models` 只返回勾选的模型，请求其他模型返回 404 `model_not_found`。
+
+新发现的模型默认不勾选，开启白名单后不会自动对外开放。上游不再提供的模型标记为“已下线”，可以移除。
 
 ## Key 池调度策略
 

@@ -237,6 +237,94 @@ export function updateCcKeyDispatch(id, { priority, maxConcurrent, timezoneOverr
   getDb().prepare(`UPDATE cc_keys SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
 }
 
+// ── Settings ────────────────────────────────────────
+
+export function getSetting(key, defaultValue = null) {
+  const row = getDb().prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  return row ? row.value : defaultValue;
+}
+
+export function setSetting(key, value) {
+  getDb().prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, String(value));
+}
+
+// ── Models（模型目录） ──────────────────────────────
+
+function parseKeyIds(json) {
+  try { const v = JSON.parse(json); return Array.isArray(v) ? v : []; } catch { return []; }
+}
+
+export function listModels() {
+  return getDb().prepare('SELECT * FROM models ORDER BY id COLLATE NOCASE ASC').all()
+    .map(r => ({ ...r, cc_key_ids: parseKeyIds(r.cc_key_ids) }));
+}
+
+export function listEnabledModelIds() {
+  return getDb().prepare('SELECT id FROM models WHERE enabled = 1 ORDER BY id COLLATE NOCASE ASC').all().map(r => r.id);
+}
+
+export function isModelEnabled(id) {
+  return !!getDb().prepare('SELECT 1 FROM models WHERE id = ? AND enabled = 1').get(id);
+}
+
+export function setModelsEnabled(ids, enabled) {
+  const stmt = getDb().prepare('UPDATE models SET enabled = ? WHERE id = ?');
+  const tx = getDb().transaction(list => { for (const id of list) stmt.run(enabled ? 1 : 0, id); });
+  tx(ids);
+}
+
+export function deleteModel(id) {
+  getDb().prepare('DELETE FROM models WHERE id = ?').run(id);
+}
+
+/**
+ * 合并一次模型同步结果
+ * @param {Map<string, { ownedBy: string, keyIds: number[] }>} seen - 本次同步成功的 Key 报告的模型
+ * @param {number[]} activeKeyIds - 参与同步的（未停用）Key
+ * @param {number[]} failedKeyIds - 本次拉取失败的 Key，保留它们上次的模型归属，避免网络抖动误判下线
+ */
+export function mergeModelSync(seen, activeKeyIds, failedKeyIds) {
+  const db = getDb();
+  const now = Date.now();
+  const active = new Set(activeKeyIds);
+  const failed = new Set(failedKeyIds);
+
+  const insert = db.prepare(
+    'INSERT INTO models (id, owned_by, enabled, available, cc_key_ids, first_seen, last_seen) VALUES (?, ?, 0, ?, ?, ?, ?)'
+  );
+  const update = db.prepare(
+    'UPDATE models SET owned_by = ?, available = ?, cc_key_ids = ?, last_seen = ? WHERE id = ?'
+  );
+
+  const tx = db.transaction(() => {
+    const existing = new Map(listModels().map(m => [m.id, m]));
+    let added = 0;
+
+    for (const [id, info] of seen) {
+      const prev = existing.get(id);
+      const kept = prev ? prev.cc_key_ids.filter(k => failed.has(k)) : [];
+      const keyIds = [...new Set([...info.keyIds, ...kept])].sort((a, b) => a - b);
+      if (prev) {
+        update.run(info.ownedBy || prev.owned_by, 1, JSON.stringify(keyIds), now, id);
+      } else {
+        insert.run(id, info.ownedBy || '', 1, JSON.stringify(keyIds), now, now);
+        added++;
+      }
+    }
+
+    for (const [id, prev] of existing) {
+      if (seen.has(id)) continue;
+      const keyIds = prev.cc_key_ids.filter(k => failed.has(k) && active.has(k));
+      update.run(prev.owned_by, keyIds.length ? 1 : 0, JSON.stringify(keyIds), prev.last_seen, id);
+    }
+    return added;
+  });
+
+  return tx();
+}
+
 // ── Usage Logs ──────────────────────────────────────
 
 export function insertUsageLog(log) {

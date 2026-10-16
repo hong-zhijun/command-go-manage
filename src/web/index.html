@@ -222,6 +222,24 @@
   .btn-sm.success { color: var(--green); border-color: var(--green); }
   .btn-sm.success:hover { background: var(--green); color: #fff; }
 
+  /* ── 模型管理 ── */
+  .switch { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text); user-select: none; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .switch .track { width: 36px; height: 20px; border-radius: 10px; background: #d1d5db; position: relative; transition: background .15s; flex-shrink: 0; }
+  .switch .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-sm); transition: transform .15s; }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .model-settings { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; background: var(--surface2); border-radius: 8px; margin-bottom: 14px; }
+  .model-settings .hint { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+  .model-warn { display: none; padding: 10px 14px; border-radius: 8px; background: var(--yellow-light); color: #b45309; font-size: 13px; margin-bottom: 14px; border: 1px solid #fde68a; }
+  .filter-row input[type=search] { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; outline: none; min-width: 200px; }
+  .filter-row input[type=search]:focus { border-color: var(--accent); }
+  .model-summary { font-size: 12px; color: var(--text-dim); margin-left: auto; }
+  #models-tbody td.check { width: 40px; text-align: center; }
+  #models-tbody input[type=checkbox], #models-check-all { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+  .model-keys { font-size: 12px; color: var(--text-dim); cursor: default; }
+
   /* ── 空状态 ── */
   .empty-state { text-align: center; padding: 40px 20px; color: var(--text-dim); font-size: 14px; }
 
@@ -311,6 +329,7 @@
       <div class="tab active" data-tab="overview">概览</div>
       <div class="tab" data-tab="keys">API Key</div>
       <div class="tab" data-tab="cc-pool">CC 账号池</div>
+      <div class="tab" data-tab="models">模型管理</div>
       <div class="tab" data-tab="logs">请求日志</div>
       <div class="tab" data-tab="errors">错误日志</div>
     </div>
@@ -474,6 +493,43 @@
       </div>
     </div>
 
+    <!-- ═══ 模型管理 ═══ -->
+    <div class="tab-content" id="tab-models">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+          <div>
+            <h3>模型管理</h3>
+            <p class="card-desc" style="margin:0">从账号池所有启用的 Key 汇总可用模型，选择对调用者开放哪些</p>
+          </div>
+          <button class="btn-secondary" id="sync-models-btn" onclick="syncModels()">↻ 从账号同步</button>
+        </div>
+        <div class="model-settings">
+          <div>
+            <label class="switch">
+              <input type="checkbox" id="model-filter-toggle" onchange="toggleModelFilter(this)">
+              <span class="track"></span>
+              <span>只开放勾选的模型</span>
+            </label>
+            <div class="hint" id="model-filter-hint"></div>
+          </div>
+          <div style="font-size:12px;color:var(--text-dim)" id="model-last-sync"></div>
+        </div>
+        <div class="model-warn" id="model-warn"></div>
+        <div class="filter-row">
+          <input type="search" id="model-search" placeholder="搜索模型 ID" oninput="renderModels()">
+          <button class="btn-sm" onclick="setVisibleModelsEnabled(true)">开放筛选结果</button>
+          <button class="btn-sm" onclick="setVisibleModelsEnabled(false)">关闭筛选结果</button>
+          <span class="model-summary" id="model-summary"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th style="width:40px;text-align:center"><input type="checkbox" id="models-check-all" title="全选/取消当前筛选结果" onchange="setVisibleModelsEnabled(this.checked)"></th><th>模型 ID</th><th>提供方</th><th>可用 Key</th><th>状态</th><th>首次发现</th><th>操作</th></tr></thead>
+            <tbody id="models-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- ═══ 请求日志 ═══ -->
     <div class="tab-content" id="tab-logs">
       <div class="card">
@@ -611,6 +667,7 @@ document.getElementById('tabs').addEventListener('click', e => {
   // 切到日志/错误 tab 时加载数据
   if (tab.dataset.tab === 'logs') loadLogs(1);
   if (tab.dataset.tab === 'errors') loadErrorLogs(1);
+  if (tab.dataset.tab === 'models') loadModels();
 });
 
 // ── 图表时间范围切换 ──
@@ -1299,10 +1356,125 @@ function toast(msg, type = 'success', duration = 3000) {
   setTimeout(() => { el.classList.add('fadeout'); setTimeout(() => el.remove(), 200); }, duration);
 }
 
+// ── 模型管理 ──
+
+let modelsState = { filterEnabled: false, lastSync: 0, models: [] };
+
+function applyModelsState(data) {
+  modelsState = { filterEnabled: !!data.filterEnabled, lastSync: data.lastSync || 0, models: data.models || [] };
+  renderModels();
+}
+
+async function loadModels() {
+  try { applyModelsState(await api('/api/admin/models')); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function syncModels() {
+  const btn = document.getElementById('sync-models-btn');
+  setBtnLoading(btn, true);
+  try {
+    const data = await api('/api/admin/models/sync', { method: 'POST' });
+    applyModelsState(data);
+    const r = data.result || {};
+    const msg = `同步完成：${r.models ?? 0} 个模型` + (r.added ? `，新增 ${r.added} 个` : '') + (r.fail ? `，${r.fail} 个 Key 拉取失败` : '');
+    toast(msg, r.fail ? 'error' : 'success');
+  } catch (e) { toast(e.message, 'error'); }
+  finally { setBtnLoading(btn, false, '↻ 从账号同步'); }
+}
+
+async function toggleModelFilter(input) {
+  const filterEnabled = input.checked;
+  const enabledCount = modelsState.models.filter(m => m.enabled).length;
+  if (filterEnabled && enabledCount === 0 && !confirm('当前没有勾选任何模型，开启后调用者将无法使用任何模型。确定开启？')) {
+    input.checked = false;
+    return;
+  }
+  try {
+    applyModelsState(await api('/api/admin/models/settings', { method: 'PATCH', body: JSON.stringify({ filterEnabled }) }));
+    toast(filterEnabled ? '已开启：只开放勾选的模型' : '已关闭：开放全部可用模型');
+  } catch (e) { input.checked = !filterEnabled; toast(e.message, 'error'); }
+}
+
+async function setModelsEnabled(ids, enabled) {
+  if (!ids.length) { renderModels(); return; }
+  try { applyModelsState(await api('/api/admin/models/enabled', { method: 'POST', body: JSON.stringify({ ids, enabled }) })); }
+  catch (e) { toast(e.message, 'error'); renderModels(); }
+}
+
+function visibleModels() {
+  const q = (document.getElementById('model-search').value || '').trim().toLowerCase();
+  return q ? modelsState.models.filter(m => m.id.toLowerCase().includes(q)) : modelsState.models;
+}
+
+function setVisibleModelsEnabled(enabled) {
+  setModelsEnabled(visibleModels().filter(m => m.enabled !== enabled).map(m => m.id), enabled);
+}
+
+async function deleteModel(id) {
+  if (!confirm(`从列表中移除已下线的模型 ${id}？`)) return;
+  try { applyModelsState(await api('/api/admin/models/delete', { method: 'POST', body: JSON.stringify({ id }) })); toast('已移除'); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+function renderModels() {
+  const { filterEnabled, lastSync, models } = modelsState;
+  const enabledCount = models.filter(m => m.enabled).length;
+  const availableCount = models.filter(m => m.available).length;
+
+  document.getElementById('model-filter-toggle').checked = filterEnabled;
+  document.getElementById('model-filter-hint').textContent = filterEnabled
+    ? '调用者只能看到并调用下方勾选的模型，其余模型的请求返回 404'
+    : '未开启：调用者可使用全部可用模型，下方勾选暂不生效';
+  document.getElementById('model-last-sync').textContent = lastSync ? '上次同步 ' + fmtTime(lastSync) : '尚未同步';
+
+  const warn = document.getElementById('model-warn');
+  const offlineEnabled = models.filter(m => m.enabled && !m.available).length;
+  if (filterEnabled && enabledCount === 0) {
+    warn.textContent = '⚠ 已开启模型白名单但没有勾选任何模型，所有调用都会被拒绝。';
+    warn.style.display = 'block';
+  } else if (filterEnabled && offlineEnabled > 0) {
+    warn.textContent = `⚠ 有 ${offlineEnabled} 个已开放的模型当前没有 Key 提供，调用会失败。`;
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+
+  document.getElementById('model-summary').textContent = `共 ${models.length} 个，可用 ${availableCount}，已开放 ${enabledCount}`;
+
+  const list = visibleModels();
+  const checkAll = document.getElementById('models-check-all');
+  checkAll.checked = list.length > 0 && list.every(m => m.enabled);
+  checkAll.indeterminate = list.some(m => m.enabled) && !checkAll.checked;
+
+  const tbody = document.getElementById('models-tbody');
+  if (models.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无模型，点击右上角「从账号同步」拉取</td></tr>';
+    return;
+  }
+  if (list.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">没有匹配的模型</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(m => {
+    const keyTip = m.keys.map(k => k.label).join('、');
+    return `<tr ${m.available ? '' : 'class="row-disabled"'}>
+      <td class="check"><input type="checkbox" ${m.enabled ? 'checked' : ''} data-model="${escAttr(m.id)}" onchange="setModelsEnabled([this.dataset.model], this.checked)" aria-label="开放 ${escAttr(m.id)}"></td>
+      <td class="mono">${esc(m.id)}</td>
+      <td style="font-size:12px">${esc(m.id.includes('/') ? m.id.split('/')[0] : m.id.split('-')[0])}</td>
+      <td><span class="model-keys" title="${escAttr(keyTip)}">${m.keys.length} 个</span></td>
+      <td>${m.available ? '<span class="badge active">可用</span>' : '<span class="badge disabled">已下线</span>'}</td>
+      <td style="font-size:12px">${fmtTime(m.firstSeen)}</td>
+      <td>${m.available ? '' : `<button class="btn-sm danger" data-model="${escAttr(m.id)}" onclick="deleteModel(this.dataset.model)">移除</button>`}</td>
+    </tr>`;
+  }).join('');
+}
+
 // ── 工具函数 ──
 
 function fmtQuota(n) { return n == null ? '0' : (Number.isInteger(n) ? String(n) : Number(n).toFixed(2)); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function escAttr(s) { return esc(s).replace(/"/g, '&quot;'); }
 function fmtTime(ts) { return ts ? new Date(ts).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '-'; }
 function fmtNum(n) {
   if (n == null) return '0';

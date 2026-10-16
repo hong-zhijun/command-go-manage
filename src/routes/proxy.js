@@ -21,26 +21,13 @@ import {
   buildResponsesObject,
 } from '../proxy/responses-translator.js';
 import { insertUsageLog } from '../db/index.js';
+import { getExposedModelIds, isModelAllowed } from '../pool/model-sync.js';
 
-// ── 模型列表 ──────────────────────────────────────
+// ── 模型白名单 ──────────────────────────────────────
 
-const MODELS = [
-  { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
-  { id: 'claude-opus-4-8', name: 'Claude Opus 4.8' },
-  { id: 'claude-opus-4-7', name: 'Claude Opus 4.7' },
-  { id: 'claude-haiku-4-5-20251001', name: 'Claude Haiku 4.5' },
-  { id: 'gpt-5.5', name: 'GPT-5.5' },
-  { id: 'gpt-5.4', name: 'GPT-5.4' },
-  { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini' },
-  { id: 'deepseek/deepseek-v4-pro', name: 'DeepSeek V4 Pro' },
-  { id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash' },
-  { id: 'moonshotai/Kimi-K2.6', name: 'Kimi K2.6' },
-  { id: 'moonshotai/Kimi-K2.5', name: 'Kimi K2.5' },
-  { id: 'Qwen/Qwen3.7-Max', name: 'Qwen 3.7 Max' },
-  { id: 'Qwen/Qwen3.6-Plus', name: 'Qwen 3.6 Plus' },
-  { id: 'google/gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-  { id: 'xiaomi/mimo-v2.5', name: 'MiMo V2.5' },
-];
+function modelNotAllowedMessage(model) {
+  return `The model \`${model}\` does not exist or you do not have access to it.`;
+}
 
 // ── 滑动窗口限流（per API Key） ──────────────────────
 
@@ -140,11 +127,11 @@ export default async function proxyRoutes(fastify) {
   fastify.get('/v1/models', async () => {
     return {
       object: 'list',
-      data: MODELS.map(m => ({
-        id: m.id,
+      data: getExposedModelIds().map(id => ({
+        id,
         object: 'model',
         created: 1700000000,
-        owned_by: m.id.includes('/') ? m.id.split('/')[0] : 'system',
+        owned_by: id.includes('/') ? id.split('/')[0] : 'system',
       })),
     };
   });
@@ -168,6 +155,10 @@ export default async function proxyRoutes(fastify) {
     const openaiReq = request.body;
     if (!openaiReq || !openaiReq.messages) {
       return reply.code(400).send({ error: { message: 'Invalid request: messages required', type: 'invalid_request_error' } });
+    }
+    if (!isModelAllowed(openaiReq.model || 'deepseek/deepseek-v4-flash')) {
+      const message = modelNotAllowedMessage(openaiReq.model || 'deepseek/deepseek-v4-flash');
+      return reply.code(404).send({ error: { message, type: 'invalid_request_error', code: 'model_not_found' } });
     }
 
     // 3. 选 CC Key（sticky 路由）
@@ -495,6 +486,10 @@ export default async function proxyRoutes(fastify) {
     const anthropicReq = request.body;
     if (!anthropicReq || !anthropicReq.messages) {
       sendAnthropicError(reply.raw, 400, 'invalid_request_error', 'Invalid request: messages required');
+      return reply.hijack();
+    }
+    if (!isModelAllowed(anthropicReq.model || 'claude-sonnet-4-6')) {
+      sendAnthropicError(reply.raw, 404, 'not_found_error', modelNotAllowedMessage(anthropicReq.model || 'claude-sonnet-4-6'));
       return reply.hijack();
     }
 
@@ -850,6 +845,10 @@ export default async function proxyRoutes(fastify) {
     let chatReq = convertResponsesToChat(respReq);
     if (!chatReq.messages.length) {
       sendResponsesError(reply.raw, 400, 'invalid_request_error', 'input is required');
+      return reply.hijack();
+    }
+    if (!isModelAllowed(chatReq.model || 'deepseek/deepseek-v4-flash')) {
+      sendResponsesError(reply.raw, 404, 'invalid_request_error', modelNotAllowedMessage(chatReq.model || 'deepseek/deepseek-v4-flash'));
       return reply.hijack();
     }
 
